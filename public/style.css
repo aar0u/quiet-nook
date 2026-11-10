@@ -11,12 +11,6 @@ body {
 
 #stage { position: fixed; inset: 0; overflow: hidden; background: #14111f; }
 
-#bubble {
-  position: absolute; top: 7%; left: 6%; max-width: min(38%, 380px); padding: 10px 14px;
-  border-radius: 14px 14px 14px 4px; background: var(--panel);
-  backdrop-filter: blur(8px); border: 1px solid #ffffff22;
-}
-
 #panel {
   position: fixed; top: 12px; right: 12px; bottom: 12px; width: 340px;
   display: flex; flex-direction: column; gap: 12px; padding: 14px; min-height: 0;
@@ -27,8 +21,9 @@ body {
   #panel { top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; height: 55%; }
 }
 
-#panel[hidden], #show[hidden] { display: none; }
-#show { position: fixed; top: 12px; right: 12px; width: 40px; height: 40px; padding: 0; background: var(--panel); backdrop-filter: blur(10px); }
+/* Collapsed: the panel shrinks to its toggle button. It is the only DOM over the canvas scene. */
+#panel.collapsed { bottom: auto; width: auto; height: auto; padding: 6px; overflow: hidden; }
+#panel.collapsed > :not(#bar), #panel.collapsed #scenes { display: none; }
 #bar { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
 #scenes { display: flex; gap: 6px; flex-wrap: wrap; }
 #scenes button { padding: 2px 10px; }
@@ -43,31 +38,7 @@ body {
 #world { position: absolute; left: 0; top: 0; width: 1672px; height: 941px; transform-origin: 0 0; pointer-events: none; }
 #world.ready { transition: transform .4s ease; }
 #scene, #fx { position: absolute; left: 0; top: 0; width: 1672px; height: 941px; }
-#clockProp {
-  position: absolute; left: 56px; bottom: 36px; width: 175px; padding: 0; border: 0; background: none;
-  pointer-events: auto; cursor: pointer; transform-origin: 50% 100%;
-  transform: rotate(-3.7deg);  /* parallel to the desk's front edge, which rises ~3.7 degrees to the right */
-  filter: drop-shadow(0 5px 4px #0008) brightness(.95);
-}
-#clockProp::before {
-  content: ""; position: absolute; left: 4%; right: 4%; bottom: -7px; height: 16px; z-index: -1;
-  background: radial-gradient(ellipse at center, #000a, transparent 70%); filter: blur(2px);
-}
-#clockProp:hover { filter: drop-shadow(0 5px 4px #0008) brightness(1.07); }
-#clockProp img { display: block; width: 100%; }
-#lcd {
-  position: absolute; left: 0; top: 0; width: 120px; height: 44px; transform-origin: 0 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  font-family: ui-monospace, "SF Mono", Menlo, "DejaVu Sans Mono", monospace; color: #ffb561;
-  text-shadow: 0 0 6px #ff9a3c99; opacity: .55; transition: opacity .3s;
-}
-#lcdMode { font-size: 9px; letter-spacing: .3em; opacity: .8; line-height: 1; }
-#lcdTime { font-size: 27px; font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums; }
-#clockProp.running #lcd { opacity: 1; }
-#clockProp.ringing { animation: ring .12s linear infinite; }
-#clockProp.ringing #lcd { opacity: 1; animation: blink .4s steps(1) infinite; }
-@keyframes ring { 0% { transform: rotate(-6.2deg); } 50% { transform: rotate(-1.2deg); } 100% { transform: rotate(-6.2deg); } }
-@keyframes blink { 50% { opacity: .2; } }
+#fx { pointer-events: auto; }  /* clicks on the desk clock are hit-tested in char.js */
 .row { display: flex; gap: 8px; justify-content: center; margin-top: 6px; }
 .row.small { color: var(--dim); font-size: 12px; }
 #sound { display: grid; gap: 4px; color: var(--dim); }

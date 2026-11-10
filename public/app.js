@@ -1,4 +1,4 @@
-import { mountScene, setScene, setExpression, EXPRESSIONS, SCENES } from "./char.js";
+import { mountScene, setScene, setExpression, setClock, ringClock, onClockClick, say, EXPRESSIONS, SCENES } from "./char.js";
 
 const $ = (id) => document.getElementById(id);
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
@@ -11,18 +11,14 @@ const minutes = () => ({ focus: +$("focusMin").value || 25, break: +$("breakMin"
 function renderClock() {
   const s = Math.max(0, Math.round(timer.left));
   const text = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-  $("lcdTime").textContent = text;
-  $("lcdMode").textContent = timer.mode === "focus" ? "专注" : "休息";
-  $("clockProp").classList.toggle("running", timer.running);
+  setClock({ time: text, mode: timer.mode === "focus" ? "专注" : "休息", running: timer.running });
   $("start").textContent = timer.running ? "暂停" : "开始";
   document.title = timer.running ? `${text} 念念的小屋` : "念念的小屋";
 }
 
 // The alarm clock on the desk rings when a phase ends: it shakes and beeps three times.
 function ring() {
-  const el = $("clockProp");
-  el.classList.add("ringing");
-  setTimeout(() => el.classList.remove("ringing"), 2400);
+  ringClock(2400);
   startAudioIfNeeded();
   for (let i = 0; i < 3; i++) {
     const t = ctx.currentTime + i * 0.7;
@@ -74,7 +70,7 @@ function toggleTimer() {
 }
 
 $("start").onclick = toggleTimer;
-$("clockProp").onclick = toggleTimer;
+onClockClick(toggleTimer);
 $("skip").onclick = () => setMode(timer.mode === "focus" ? "break" : "focus");
 $("reset").onclick = () => setMode(timer.mode);
 for (const id of ["focusMin", "breakMin"]) $(id).onchange = () => { save("mins", minutes()); if (!timer.running) setMode(timer.mode); };
@@ -159,62 +155,26 @@ const SCENE_SOUND = { rain: { rain: 60, brown: 20 }, day: { rain: 0, brown: 15 }
 $("autoSound").checked = load("autoSound", true);
 $("autoSound").onchange = () => save("autoSound", $("autoSound").checked);
 
-// Each scene has its own clock sprite, drawn in that scene's perspective and light. The LCD text is warped
-// onto the sprite's glass: a homography from a flat box to the four corners stored in props/clock.json.
-const clockMeta = fetch("props/clock.json").then((r) => r.json());
-const CLOCK_W = 175, LCD_W = 120, LCD_H = 44;
-function homography(q) {
-  const s = [[0, 0], [LCD_W, 0], [LCD_W, LCD_H], [0, LCD_H]];
-  const A = [], b = [];
-  for (let i = 0; i < 4; i++) {
-    const [x, y] = s[i], [u, v] = q[i];
-    A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); b.push(u);
-    A.push([0, 0, 0, x, y, 1, -v * x, -v * y]); b.push(v);
-  }
-  for (let i = 0; i < 8; i++) {  // Gaussian elimination with partial pivoting
-    let p = i;
-    for (let r = i + 1; r < 8; r++) if (Math.abs(A[r][i]) > Math.abs(A[p][i])) p = r;
-    [A[i], A[p]] = [A[p], A[i]]; [b[i], b[p]] = [b[p], b[i]];
-    for (let r = i + 1; r < 8; r++) {
-      const f = A[r][i] / A[i][i];
-      for (let c = i; c < 8; c++) A[r][c] -= f * A[i][c];
-      b[r] -= f * b[i];
-    }
-  }
-  const h = Array(8);
-  for (let i = 7; i >= 0; i--) {
-    let sum = b[i];
-    for (let c = i + 1; c < 8; c++) sum -= A[i][c] * h[c];
-    h[i] = sum / A[i][i];
-  }
-  return `matrix3d(${h[0]},${h[3]},0,${h[6]},${h[1]},${h[4]},0,${h[7]},0,0,1,0,${h[2]},${h[5]},0,1)`;
-}
-async function setClock(id) {
-  const m = (await clockMeta)[id];
-  const hpx = CLOCK_W / m.aspect;
-  $("clockImg").src = `props/clock_${id}.webp`;
-  $("lcd").style.transform = homography(m.quad.map(([x, y]) => [x * CLOCK_W, y * hpx]));
-}
-
 function pickScene(id) {
   id = setScene(id);
-  setClock(id);
   save("scene", id);
   for (const b of $("scenes").children) b.classList.toggle("active", b.dataset.id === id);
   if ($("autoSound").checked) {
     for (const name of SOUNDS) { $(name).value = SCENE_SOUND[id][name]; applyVolume(name); }
   }
 }
+// The side panel is the only DOM over the scene. Collapsing it leaves just the toggle button.
+const panelOpen = () => !$("panel").classList.contains("collapsed");
 function setPanel(open) {
-  $("panel").hidden = !open;
-  $("show").hidden = open;
+  $("panel").classList.toggle("collapsed", !open);
+  $("hide").textContent = open ? "✕" : "☰";
+  $("hide").title = open ? "收起面板 (H)" : "展开面板 (H)";
   save("panelOpen", open);
   layoutWorld();
 }
-$("hide").onclick = () => setPanel(false);
-$("show").onclick = () => setPanel(true);
+$("hide").onclick = () => setPanel(!panelOpen());
 addEventListener("keydown", (e) => {
-  if (e.key.toLowerCase() === "h" && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) setPanel($("panel").hidden);
+  if (e.key.toLowerCase() === "h" && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) setPanel(!panelOpen());
 });
 
 // ---------- character + chat ----------
@@ -261,11 +221,9 @@ for (const m of history) if (m.display !== undefined) addMsg(m.role === "user" ?
 
 let bubbleTimer;
 function showBubble(text) {
-  const b = $("bubble");
-  b.textContent = text;
-  b.hidden = false;
+  say(text);
   clearTimeout(bubbleTimer);
-  bubbleTimer = setTimeout(() => { b.hidden = true; setExpression("neutral"); }, 10000);
+  bubbleTimer = setTimeout(() => { say(""); setExpression("neutral"); }, 10000);
 }
 
 async function speak(text, silentUser = false) {
@@ -319,7 +277,7 @@ function layoutWorld() {
   const w = $("stage").clientWidth, h = $("stage").clientHeight;
   const s = Math.max(w / 1672, h / 941);
   const narrow = matchMedia("(max-width: 760px)").matches;
-  const free = $("panel").hidden || narrow ? w : w - 364;
+  const free = !panelOpen() || narrow ? w : w - 364;
   const ox = Math.min(0, Math.max(w - 1672 * s, free / 2 - 560 * s));
   $("world").style.transform = `translate(${ox}px, ${(h - 941 * s) / 2}px) scale(${s})`;
 }
@@ -332,6 +290,5 @@ for (const s of SCENES) {
   $("scenes").append(b);
 }
 for (const b of $("scenes").children) b.classList.toggle("active", b.dataset.id === load("scene", SCENES[0].id));
-setClock(load("scene", SCENES[0].id));
 setPanel(load("panelOpen", true));
 requestAnimationFrame(() => $("world").classList.add("ready"));

@@ -10,7 +10,9 @@ A cozy desktop study companion. You work at a desk in a small anime-style room; 
 
 - Four scenes: rainy night, afternoon, dusk, snowy night. Each has its own light, ambient sound preset, and weather effects (rain streaks, snow, drifting dust, lamp flicker, steam from the mug).
 - She is a separate layer: she breathes, her hair sways, her head leans toward your cursor, and she blinks. Six expressions fade into each other.
-- A pomodoro timer on the desk. Click the clock to start or pause. It rings and shakes when a phase ends. The display is warped onto the clock's glass in that scene's perspective.
+- A pomodoro timer on the desk. Click the clock to start or pause. It rings and shakes when a phase ends. It is drawn on the canvas with contact shadows under each foot, and its display is mapped onto the glass in that scene's perspective.
+- Cute stickers on the laptop lid, baked into every frame with the lid's perspective and lighting.
+- The whole room, including the clock and her speech bubble, is canvas. The side panel is the only DOM element over it.
 - She can operate the clock: say "I'm going to focus for a while" and she starts it.
 - Chat with her. She sees the timer state and your to-do list, and stays quiet while you focus.
 - Synthesized rain and brown noise, no audio files.
@@ -48,8 +50,9 @@ public/
   scene/<scene>/*.webp   full-room frames that differ only in her face, plus mask.png (her body and hair)
   props/                 one alarm clock sprite per scene, and clock.json (corners of its glass)
   char.js                WebGL scene: draws the frame, then draws her again displaced a few pixels
-                         through the mask (breathing, hair sway, head lean); 2D fx canvas on top
-  app.js                 timer, to-do list, sound, chat, panel, clock display
+                         through the mask (breathing, hair sway, head lean); 2D canvas on top for
+                         weather, the desk clock and the speech bubble
+  app.js                 timer, to-do list, sound, chat, side panel
 server.js, backends.js   static server and the chat proxy
 tools/                   scripts used to build the art, see below
 ```
@@ -61,7 +64,7 @@ She answers in a fixed format: an expression tag (`[neutral]`, `[happy]`, `[shy]
 The images were generated with an AI image model (`gpt-image-2`) and are not hand drawn. `tools/` has the scripts, written for the author's machine, so expect to edit paths:
 
 - `gen.py`: one image edit or generation through a local opencode service.
-- `build.py`: converts the generated frames to `public/scene/*` and builds the body and hair masks (the masks need a `rembg` cutout of each frame and a hand-drawn polygon that keeps the lamp, laptop, and chair out).
+- `build.py`: converts the generated frames to `public/scene/*`, bakes the laptop stickers into each frame, and builds the body and hair masks. The masks need a `rembg` cutout of each frame, a hand-drawn polygon, and a colour rule that keeps the chair and blanket out so they do not move when she breathes. The stickers come from one generated sticker sheet.
 - `clockbuild.py`: keys the clock sprites and measures the corners of each clock's display.
 - `cdp_t.mjs`: drives a Chrome DevTools Protocol endpoint for screenshots.
 
