@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>念念的小屋</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <section id="stage">
+    <div id="world">
+      <canvas id="scene" width="1672" height="941"></canvas>
+      <canvas id="fx" width="1672" height="941"></canvas>
+      <button id="clockProp" title="点击开始 / 暂停">
+        <img id="clockImg" alt="">
+        <span id="lcd"><span id="lcdMode"></span><span id="lcdTime">25:00</span></span>
+      </button>
+    </div>
+    <div id="bubble" hidden></div>
+  </section>
+
+  <button id="show" title="展开面板 (H)" hidden>☰</button>
+  <aside id="panel">
+    <div id="bar">
+      <div id="scenes"></div>
+      <button id="hide" title="收起面板 (H)">✕</button>
+    </div>
+    <div id="timer">
+      <div class="row">
+        <button id="start">开始</button>
+        <button id="skip" title="跳过当前阶段">跳过</button>
+        <button id="reset">重置</button>
+      </div>
+      <div class="row small">
+        <label>专注 <input id="focusMin" type="number" min="1" max="120" value="25"> 分</label>
+        <label>休息 <input id="breakMin" type="number" min="1" max="60" value="5"> 分</label>
+      </div>
+    </div>
+
+    <div id="sound">
+      <label>雨声 <input id="rain" type="range" min="0" max="100" value="0"></label>
+      <label>低频噪声 <input id="brown" type="range" min="0" max="100" value="0"></label>
+      <label class="check"><input id="autoSound" type="checkbox"> 切换场景时自动配音</label>
+    </div>
+
+    <div id="todo">
+      <form id="todoForm"><input id="todoInput" placeholder="添加任务，回车确认" autocomplete="off"></form>
+      <ul id="todoList"></ul>
+    </div>
+
+    <div id="chat">
+      <div id="log"></div>
+      <form id="chatForm"><input id="chatInput" placeholder="和她说点什么" autocomplete="off"></form>
+    </div>
+  </aside>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>

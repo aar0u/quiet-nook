@@ -1,0 +1,96 @@
+:root {
+  --bg: #1e1b2e; --panel: #1b1830c4; --fg: #f1ecfa; --dim: #b3acd0; --accent: #f4b6a0;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; overflow: hidden; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 14px/1.5 system-ui, "PingFang SC", "Noto Sans CJK SC", sans-serif;
+}
+
+#stage { position: fixed; inset: 0; overflow: hidden; background: #14111f; }
+
+#bubble {
+  position: absolute; top: 7%; left: 6%; max-width: min(38%, 380px); padding: 10px 14px;
+  border-radius: 14px 14px 14px 4px; background: var(--panel);
+  backdrop-filter: blur(8px); border: 1px solid #ffffff22;
+}
+
+#panel {
+  position: fixed; top: 12px; right: 12px; bottom: 12px; width: 340px;
+  display: flex; flex-direction: column; gap: 12px; padding: 14px; min-height: 0;
+  background: var(--panel); backdrop-filter: blur(10px);
+  border: 1px solid #ffffff1c; border-radius: 16px; overflow-y: auto;
+}
+@media (max-width: 760px) {
+  #panel { top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; height: 55%; }
+}
+
+#panel[hidden], #show[hidden] { display: none; }
+#show { position: fixed; top: 12px; right: 12px; width: 40px; height: 40px; padding: 0; background: var(--panel); backdrop-filter: blur(10px); }
+#bar { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
+#scenes { display: flex; gap: 6px; flex-wrap: wrap; }
+#scenes button { padding: 2px 10px; }
+#scenes button.active { background: #f4b6a040; border-color: var(--accent); }
+#hide { border: 0; background: none; color: var(--dim); padding: 2px 8px; }
+#sound .check { justify-content: flex-start; font-size: 12px; }
+#sound .check input { flex: none; }
+
+#timer { text-align: center; }
+
+/* Everything in the room lives in a fixed 1672x941 world; app.js scales and positions #world to fit the window. */
+#world { position: absolute; left: 0; top: 0; width: 1672px; height: 941px; transform-origin: 0 0; pointer-events: none; }
+#world.ready { transition: transform .4s ease; }
+#scene, #fx { position: absolute; left: 0; top: 0; width: 1672px; height: 941px; }
+#clockProp {
+  position: absolute; left: 56px; bottom: 36px; width: 175px; padding: 0; border: 0; background: none;
+  pointer-events: auto; cursor: pointer; transform-origin: 50% 100%;
+  transform: rotate(-3.7deg);  /* parallel to the desk's front edge, which rises ~3.7 degrees to the right */
+  filter: drop-shadow(0 5px 4px #0008) brightness(.95);
+}
+#clockProp::before {
+  content: ""; position: absolute; left: 4%; right: 4%; bottom: -7px; height: 16px; z-index: -1;
+  background: radial-gradient(ellipse at center, #000a, transparent 70%); filter: blur(2px);
+}
+#clockProp:hover { filter: drop-shadow(0 5px 4px #0008) brightness(1.07); }
+#clockProp img { display: block; width: 100%; }
+#lcd {
+  position: absolute; left: 0; top: 0; width: 120px; height: 44px; transform-origin: 0 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-family: ui-monospace, "SF Mono", Menlo, "DejaVu Sans Mono", monospace; color: #ffb561;
+  text-shadow: 0 0 6px #ff9a3c99; opacity: .55; transition: opacity .3s;
+}
+#lcdMode { font-size: 9px; letter-spacing: .3em; opacity: .8; line-height: 1; }
+#lcdTime { font-size: 27px; font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums; }
+#clockProp.running #lcd { opacity: 1; }
+#clockProp.ringing { animation: ring .12s linear infinite; }
+#clockProp.ringing #lcd { opacity: 1; animation: blink .4s steps(1) infinite; }
+@keyframes ring { 0% { transform: rotate(-6.2deg); } 50% { transform: rotate(-1.2deg); } 100% { transform: rotate(-6.2deg); } }
+@keyframes blink { 50% { opacity: .2; } }
+.row { display: flex; gap: 8px; justify-content: center; margin-top: 6px; }
+.row.small { color: var(--dim); font-size: 12px; }
+#sound { display: grid; gap: 4px; color: var(--dim); }
+#sound label { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+#sound input { flex: 1; }
+
+button, input { font: inherit; color: inherit; }
+button { background: #ffffff14; border: 1px solid #ffffff22; border-radius: 8px; padding: 4px 14px; cursor: pointer; }
+button:hover { background: #ffffff26; }
+input[type=text], input:not([type]) {
+  background: #00000040; border: 1px solid #ffffff1a; border-radius: 8px; padding: 6px 10px; width: 100%;
+}
+input[type=number] { width: 52px; padding: 2px 6px; background: #00000040; border: 1px solid #ffffff1a; border-radius: 6px; }
+
+#todo ul { list-style: none; margin: 8px 0 0; padding: 0; max-height: 110px; overflow-y: auto; }
+#todo li { display: flex; gap: 8px; align-items: center; padding: 2px 0; }
+#todo li.done span { text-decoration: line-through; color: var(--dim); }
+#todo li span { flex: 1; cursor: pointer; }
+#todo li button { padding: 0 8px; border: 0; background: none; color: var(--dim); }
+
+#chat { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 140px; }
+#log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.msg { padding: 6px 10px; border-radius: 10px; max-width: 90%; white-space: pre-wrap; }
+.msg.user { align-self: flex-end; background: #f4b6a033; }
+.msg.bot { align-self: flex-start; background: #ffffff14; }
+.msg.err { align-self: center; color: #ff9b9b; }

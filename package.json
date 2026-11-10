@@ -1,0 +1,13 @@
+{
+  "name": "quiet-nook",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A cozy desktop study companion: pomodoro desk clock, layered anime room, and an AI girlfriend who keeps you company.",
+  "license": "MIT",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=20" }
+}

@@ -1,0 +1,5 @@
+node_modules/
+server.log
+.DS_Store
+# generated source images (about 75 MB); the shipped assets are in public/
+art-src/
