@@ -277,12 +277,17 @@ $("chatForm").onsubmit = (e) => {
   speak(text);
 };
 
-// The look she wears is chosen by hand; with autoLook she changes into the bedtime look while the clock is on a break.
-const BREAK_LOOK = "sleep";
-let chosenLook = load("look", LOOKS[0].id);
+// The look she wears is chosen by hand; with autoLook she changes into the look marked when:"break" in looks.json
+// while the clock is on a break.
+const BREAK_LOOK = LOOKS.find((l) => l.when === "break");
+let chosenLook = LOOKS.some((l) => l.id === load("look", "")) ? load("look", "") : LOOKS[0].id;
 $("autoLook").checked = load("autoLook", true);
-$("autoLook").onchange = () => { save("autoLook", $("autoLook").checked); applyLook(); };function applyLook() {
-  const id = $("autoLook").checked && timer.mode === "break" ? BREAK_LOOK : chosenLook;
+$("autoLook").onchange = () => { save("autoLook", $("autoLook").checked); applyLook(); };
+$("autoLookRow").hidden = !BREAK_LOOK;
+if (BREAK_LOOK) $("autoLookText").textContent = `休息时换成${BREAK_LOOK.name}造型`;
+const lookNow = () => (BREAK_LOOK && $("autoLook").checked && timer.mode === "break" ? BREAK_LOOK.id : chosenLook);
+function applyLook() {
+  const id = lookNow();
   setLook(id).then((shown) => { for (const b of $("looks").children) b.classList.toggle("active", b.dataset.id === chosenLook); return shown; });
 }
 for (const l of LOOKS) {
@@ -292,7 +297,7 @@ for (const l of LOOKS) {
   b.onclick = () => { chosenLook = l.id; save("look", l.id); applyLook(); };
   $("looks").append(b);
 }
-mountScene(load("scene", SCENES[0].id), $("autoLook").checked && timer.mode === "break" ? BREAK_LOOK : chosenLook);
+mountScene(load("scene", SCENES[0].id), lookNow());
 for (const b of $("looks").children) b.classList.toggle("active", b.dataset.id === chosenLook);
 lookReady = true;
 

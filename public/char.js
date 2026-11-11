@@ -19,12 +19,9 @@ export const SCENES = [
 const FRAMES = [...EXPRESSIONS, "blink"];
 // A look is clothes + hair + pose + a set of faces, one folder public/looks/<id>/: neutral.webp is the whole picture
 // and every other face is a small patch of the face laid over it (faces.json has the patch rectangles).
-export const LOOKS = [
-  { id: "default", name: "居家", fit: [1, 0, 0, 0] },
-  // fit = [scale, anchor x, anchor y, shift x]: keeps this pose's right arm off the laptop screen in every scene
-  { id: "sleep", name: "睡前", fit: [0.88, 270, 784, -30] },
-  { id: "rose", name: "成熟", fit: [1, 0, 0, 0] },
-];
+// The list is public/looks/looks.json, written by tools/makelook.py: [{id, name, fit, when}]. fit = [scale, anchor x,
+// anchor y, shift x] places the pose in the room; when = "break" makes it the look she wears during a break.
+export const LOOKS = await fetch("looks/looks.json").then((r) => r.json());
 const MUG = [1300, 658];
 const FADE_MS = 250;
 // The desk clock sits at the left front of the desk, parallel to its front edge (which rises 3.7 degrees to the right).

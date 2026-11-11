@@ -1,0 +1,36 @@
+{
+  "_comment": "Prompt rules shared by every look. Each rule is here because the model got it wrong without it; the reason is in 'why'.",
+  "identity": "default",
+  "why": {
+    "only_her": "without it the model draws its own desk and chair under her",
+    "keep_eyes": "without it the eyes come out rounder and larger and she stops looking like herself",
+    "mouth": "a flat-colour mouth looks pasted on; realistic teeth do not match the line art; both were tried",
+    "yawn": "a yawn with teeth showed a row of small squares",
+    "sleeve": "the picture is cut off at the bottom, which left a straight edge and a right-angle corner; asking for a bigger redraw made the sleeve puffy"
+  },
+  "frame": "Keep the same camera framing, scale and position in the frame, and cut her off along the same flat horizontal line at the bottom as in the attached image.",
+  "transparent": "Fully transparent background (real alpha channel, no matte, no fringe, every hair strand with natural soft alpha).",
+  "only_her": "Draw ONLY her. No desk, no table, no chair, no tabletop, no furniture, no props, no shadows on any surface.",
+  "same": "Keep the woman, hair, outfit, pose, position, scale and lighting exactly identical, pixel-level consistent.",
+  "keep_eyes": "Keep her eye shape and eye size exactly as they are (not rounder, not larger).",
+  "mouth": "The open mouth is a moderate, natural size (not wide, not stretched). Render it with exactly the same line art and soft cel shading as her eyes and lips: a thin dark-brown outline around the mouth with the same line weight as the lip line, an interior shaded from a deeper rosy pink at the back to a lighter tone near the tongue with soft gradients, a small tongue with a faint curved line, and the upper teeth as one narrow light-cream strip with soft shading and a thin outline, with no individual teeth. No flat uniform colour fills, no realistic photographic teeth.",
+  "yawn_mouth": "A small rounded open mouth. NO TEETH are visible at all: the open mouth shows only the soft pink interior and a little tongue, drawn with a thin outline and soft shading in the same style as her lips, with no white anywhere inside the mouth.",
+  "faces": {
+    "happy": "a bright smile with both eyes closed in happy curves. {mouth}",
+    "shy": "a bashful, modest look: a light blush on the cheeks, her eyes glancing aside, a small gentle smile.",
+    "sleepy": "half-closed sleepy eyes and a small yawn. {yawn_mouth}",
+    "think": "a thinking look, eyes glancing up and to the side, lips slightly pursed.",
+    "cheer": "an excited open-mouth smile with sparkling eyes. {mouth}",
+    "blink": "both eyes gently closed as in a natural blink, still smiling softly."
+  },
+  "steps": {
+    "eyes": {
+      "refs": ["prev", "identity"],
+      "prompt": "You are given two images of the same woman. Image 1 is the picture to keep: outfit, hairstyle, pose, framing. Image 2 is her original face: the reference for her EYES and face identity. Redraw image 1 exactly (same outfit, hairstyle, pose, position, scale, lighting). {transparent} {only_her} Give her the exact eye shape, eye size, eyelid line, iris size and gentle almond proportions of image 2: NOT larger, NOT rounder, NOT wider. Her gaze is calm, soft and attentive, looking at the viewer, with a gentle natural smile, eyelids relaxed at the height of image 2 (not half-closed, not dreamy, not wide open)."
+    },
+    "sleeve": {
+      "refs": ["prev"],
+      "prompt": "Keep EVERYTHING exactly identical: the woman, her face, eyes, hair, clothes, the exact sleeve shape, the slim fitted volume of the sleeves and forearms, her hands, pose, position, scale, lighting, and the transparent background. {only_her} Change ONLY the bottom edge of the figure: the sleeves and forearms are cut off by a straight horizontal line with a sharp right-angle corner at the right end. Redraw only that lower contour so the sleeve ends in a natural, soft, gently curved shape with a rounded corner, like a sleeve resting on a table, with no straight horizontal cut longer than a few pixels and no right angles. Do NOT add volume, puffiness, extra folds or extra fabric; the sleeve keeps the same thickness and silhouette everywhere else."
+    }
+  }
+}

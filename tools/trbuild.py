@@ -128,24 +128,30 @@ def aligned(n, src, faces):
         out[f] = np.stack([ndimage.shift(e[..., c], (dy, dx), order=1, mode="nearest") for c in range(4)], -1)
     return out
 
-def round_corners(n, box, r):
-    """Rounds the sharp convex corners of her silhouette inside box (x0, y0, x1, y1) with a morphological opening.
-    Used where the picture is cut off by the frame and leaves a straight edge with a right angle."""
-    x0, y0, x1, y1 = box
-    yy, xx = np.mgrid[-r:r + 1, -r:r + 1]
-    disk = (yy ** 2 + xx ** 2) <= r * r
-    b = n[y0:y1, x0:x1, 3] > 0.5
-    removed = b & ~ndimage.binary_opening(np.pad(b, r, mode="edge"), structure=disk)[r:-r, r:-r]
-    keep = 1 - np.clip(ndimage.gaussian_filter(removed.astype(np.float32), 1.0) * 1.6, 0, 1)
-    n = n.copy()
-    n[y0:y1, x0:x1] *= keep[..., None]
-    return n
+def check(n, es, w):
+    """Problems a look must not ship with; empty list = fine. These are the failures seen so far:
+    a feature change left outside the face region (a seam would cut through it), the silhouette growing (dark blocks
+    beside the head), and a face region that is not a face (the whole figure would twitch on a change)."""
+    problems = []
+    inside = w > 0.5
+    area = float(inside.sum())
+    if not 15000 < area < 130000:
+        problems.append(f"face region is {area:.0f} px, expected 15000..130000")
+    for f, e in es.items():
+        # strong changes above the bottom of the region; the soft shading of chin and neck below it is left out on purpose
+        feat = face_changes(n, e) & (np.abs(e - n).max(-1) > 0.3)
+        feat[np.nonzero(inside)[0].max() + 1:] = False
+        if feat.any():
+            outside = float((feat & ~inside).sum()) / float(feat.sum())
+            if outside > 0.02:
+                problems.append(f"{f}: {outside:.0%} of its feature changes lie outside the face region")
+        grown = float(((n * (1 - w[..., None]) + e * w[..., None])[..., 3] - n[..., 3]).max())
+        if grown > 0.25:
+            problems.append(f"{f}: silhouette grows by {grown:.2f} over neutral")
+    return problems
 
 def build(src, out, faces):
     n = load(src, "neutral")
-    if (src / "round.json").exists():                # {"box": [x0, y0, x1, y1], "r": radius}
-        cfg = json.loads((src / "round.json").read_text())
-        n = round_corners(n, cfg["box"], cfg["r"])
     es = aligned(n, src, faces)
     w = face_region(n, list(es.values()))
     out.mkdir(parents=True, exist_ok=True)
