@@ -1,57 +1,80 @@
 // The room is one WebGL canvas in a fixed 1672x941 "world" (app.js scales it to the window).
-// Each scene has full frames that differ only in her face, plus a mask of her body. The shader draws the
-// current frame, then draws her again from the same frame, displaced a few pixels (breathing, hair sway,
-// head lean), through the mask. The fx canvas (rain, snow, dust, lamp glow, steam) and DOM props sit above.
+// Two layers, back to front (nothing is drawn over her: the laptop sits clear of where she rests her arms, so a
+// new look or pose needs no per-scene foreground work):
+//   plate  - the empty room, one per scene (scene/<id>/plate.webp)
+//   her    - a transparent cut-out of her, one per expression, shared by every scene (char/<face>.webp). The
+//            shader lights it per scene, casts her shadow onto the plate, and displaces it a few pixels
+//            (breathing, hair sway, head lean)
+// The fx canvas (rain, snow, dust, lamp glow, steam, the desk clock, the speech bubble) sits above.
 export const EXPRESSIONS = ["neutral", "happy", "shy", "sleepy", "think", "cheer"];
 const PANES = [[773, 0, 127, 480], [947, 0, 320, 493]];
+// look: how the neutral-lit cut-out is graded to fit the room. tint multiplies her colour, shadow is the offset
+// (world px) of her shadow on the room.
 export const SCENES = [
-  { id: "rain", name: "雨夜", fx: "rain", glass: PANES, lamp: [220, 456] },
-  { id: "day", name: "午后", fx: "dust", dust: "255,240,200" },
-  { id: "dusk", name: "黄昏", fx: "dust", dust: "255,205,150", lamp: [220, 456] },
-  { id: "snow", name: "雪夜", fx: "snow", glass: PANES, lamp: [220, 456] },
+  { id: "rain", name: "雨夜", fx: "rain", glass: PANES, lamp: { pos: [225, 455], rgb: [1.0, 0.72, 0.4], k: 0.16 }, look: { tint: [0.9, 0.9, 0.97], shadow: [10, 12] } },
+  { id: "day", name: "午后", fx: "dust", dust: "255,240,200", look: { tint: [1.0, 0.98, 0.94], shadow: [-10, 12] } },
+  { id: "dusk", name: "黄昏", fx: "dust", dust: "255,205,150", lamp: { pos: [225, 455], rgb: [1.0, 0.66, 0.3], k: 0.14 }, look: { tint: [1.0, 0.86, 0.74], shadow: [-8, 12] } },
+  { id: "snow", name: "雪夜", fx: "snow", glass: PANES, lamp: { pos: [225, 450], rgb: [1.0, 0.74, 0.44], k: 0.15 }, look: { tint: [0.92, 0.92, 0.98], shadow: [10, 12] } },
 ];
 const FRAMES = [...EXPRESSIONS, "blink"];
-const MUG = [1267, 652];
+const MUG = [1300, 658];
 const FADE_MS = 250;
 // The desk clock sits at the left front of the desk, parallel to its front edge (which rises 3.7 degrees to the right).
 const CLOCK = { left: 56, bottom: 905, width: 175, tilt: -3.7, lcdW: 120, lcdH: 44 };
-const BUBBLE = { x: 24, y: 70, w: 340, pad: 20, line: 40, font: "28px system-ui, 'PingFang SC', 'Noto Sans CJK SC', sans-serif" };
+const NO_LINE_START = "，。！？、；：）」』”…～,.!?;:)";
+const BUBBLE = { x: 24, y: 70, w: 340, pad: 20, line: 34, font: "23px system-ui, 'PingFang SC', 'Noto Sans CJK SC', sans-serif" };
 
 const $ = (id) => document.getElementById(id);
 const rand = (a, b) => a + Math.random() * (b - a);
 const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 let scene = SCENES[0], expr = "neutral", loadToken = 0;
-let gl, loc, ctx2d, tex = null, images = null;
+let gl, loc, ctx2d;
+let her = null;   // her frames {img, tex}, loaded once
+let room = null;  // the current scene's plate {plate, plateTex}
 let A = "neutral", B = "neutral", mixStart = 0, mixMs = FADE_MS, dirty = true;
 const mouse = { x: 0, y: 0, tx: 0, ty: 0 };
 let fx, fxc, parts = [], last = 0, blinkTimer;
 const clock = { time: "25:00", mode: "专注", running: false, ringUntil: 0, img: null, meta: null };
 const clockMeta = fetch("props/clock.json").then((r) => r.json());
 let clockToken = 0, onClick = () => {};
-const bubble = { text: "", lines: null, t0: 0 };
+const bubble = { text: "", lines: null, wrapW: 0, t0: 0 };
+const view = { x0: 0, x1: 1672 };
 
 // ---------------- scene (WebGL) ----------------
 const VS = `attribute vec2 p; varying vec2 uv;
 void main(){ uv = vec2(p.x * .5 + .5, .5 - p.y * .5); gl_Position = vec4(p, 0., 1.); }`;
-// Displacements are in world pixels; uv is the frame, y down.
+// Displacements are in world pixels; uv is the frame, y down. Her frames are premultiplied RGBA, so mixing two of
+// them is a correct cross-fade and "over" is simply her + room * (1 - her.a).
 const FS = `precision mediump float;
-uniform sampler2D uA, uB, uMask; uniform float uMix, uT; uniform vec2 uMouse;
+uniform sampler2D uA, uB, uPlate; uniform float uMix, uT; uniform vec2 uMouse, uShadow;
+uniform vec3 uTint, uLampRgb; uniform vec4 uLamp;  // uLamp: x, y, k (strength, 0 = off), unused
 varying vec2 uv;
+vec4 her(vec2 p){ return mix(texture2D(uA, p), texture2D(uB, p), uMix); }
 void main(){
   vec2 px = uv * vec2(1672., 941.);
-  vec4 base = mix(texture2D(uA, uv), texture2D(uB, uv), uMix);
+  vec2 inv = 1. / vec2(1672., 941.);
+  vec4 h0 = her(uv);
   float rest = 1. - smoothstep(700., 780., px.y);                 // forearms on the desk stay put
   float body = smoothstep(380., 520., px.y) * (1. - smoothstep(620., 760., px.y));
   float head = 1. - smoothstep(380., 520., px.y);
   vec2 d = vec2(0., -sin(uT * 1.2) * (1.2 + 2.2 * body) * rest);  // breathing, strongest at the shoulders
   d += vec2(uMouse.x * 2.6 + sin(uT * .45), uMouse.y * 1.1) * head; // head leans toward the cursor
-  float hair = texture2D(uMask, uv).g * smoothstep(300., 700., px.y) * rest;
-  d.x += hair * sin(uT * .9 + px.y * .012 + px.x * .004) * 2.4;     // long hair sways below the chin
-  vec2 p = uv - d / vec2(1672., 941.);
-  float m = texture2D(uMask, p).r;
-  vec4 girl = mix(texture2D(uA, p), texture2D(uB, p), uMix);
-  gl_FragColor = vec4(mix(base.rgb, girl.rgb, m), 1.);
+  float lum = dot(h0.rgb, vec3(.299, .587, .114)) / max(h0.a, .001);
+  float hair = h0.a * smoothstep(.40, .16, lum) * smoothstep(300., 700., px.y) * rest;
+  d.x += hair * sin(uT * .9 + px.y * .012 + px.x * .004) * 1.2;     // long hair sways below the chin
+  vec2 p = uv - d * inv;
+  vec4 g = her(p);
+  vec3 room = texture2D(uPlate, uv).rgb;
+  // Lamp glow belongs to the room, so it is added before she is drawn over it: her own colours never change with it.
+  vec2 q = (px - uLamp.xy) / vec2(190., 240.);
+  q.y -= .35;                                                        // the light falls below the shade
+  room += uLampRgb * uLamp.z * exp(-dot(q, q) * 2.2);
+  float s = 0.;                                                      // her shadow on the room: her alpha, offset
+  for (int i = 0; i < 5; i++) s += her(p - uShadow * (.4 + .35 * float(i)) * inv).a;  // and softened by 5 taps
+  room *= 1. - .3 * s / 5.;
+  vec3 col = g.rgb * uTint + room * (1. - g.a);
+  gl_FragColor = vec4(col, 1.);
 }`;
 
 function compile(type, src) {
@@ -75,46 +98,56 @@ function initGL(canvas) {
   const p = gl.getAttribLocation(prog, "p");
   gl.enableVertexAttribArray(p);
   gl.vertexAttribPointer(p, 2, gl.FLOAT, false, 0, 0);
-  loc = Object.fromEntries(["uA", "uB", "uMask", "uMix", "uT", "uMouse"].map((n) => [n, gl.getUniformLocation(prog, n)]));
+  loc = Object.fromEntries(["uA", "uB", "uPlate", "uMix", "uT", "uMouse", "uShadow", "uTint", "uLamp", "uLampRgb"].map((n) => [n, gl.getUniformLocation(prog, n)]));
   gl.uniform1i(loc.uA, 0);
   gl.uniform1i(loc.uB, 1);
-  gl.uniform1i(loc.uMask, 2);
+  gl.uniform1i(loc.uPlate, 2);
   gl.viewport(0, 0, canvas.width, canvas.height);
 }
 
-function upload(img) {
+function upload(img, premultiply) {
   const t = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, t);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, img);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premultiply);  // so linear filtering never blends in dark fringes
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
   for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
   return t;
 }
 
+async function decode(src) {
+  const img = new Image();
+  img.src = src;
+  await img.decode();
+  return img;
+}
+
+async function loadHer() {
+  const imgs = await Promise.all(FRAMES.map((f) => decode(`char/${f}.webp`)));
+  her = Object.fromEntries(FRAMES.map((f, i) => [f, { img: imgs[i], tex: gl ? upload(imgs[i], true) : null }]));
+  dirty = true;
+}
+
 async function loadScene() {
   const token = ++loadToken, id = scene.id;
-  const names = [...FRAMES, "mask"];
-  const imgs = await Promise.all(names.map(async (n) => {
-    const img = new Image();
-    img.src = `scene/${id}/${n}.${n === "mask" ? "png" : "webp"}`;
-    await img.decode();
-    return img;
-  }));
+  const plate = await decode(`scene/${id}/plate.webp`);
   if (token !== loadToken) return;  // a newer scene was picked while loading
-  if (gl) {
-    if (tex) for (const t of Object.values(tex)) gl.deleteTexture(t);
-    tex = Object.fromEntries(names.map((n, i) => [n, upload(imgs[i])]));
-  }
-  images = Object.fromEntries(names.map((n, i) => [n, imgs[i]]));
+  if (gl && room) gl.deleteTexture(room.plateTex);
+  room = { plate, plateTex: gl ? upload(plate, false) : null };
   dirty = true;
 }
 
 function drawScene(now, t) {
   const mix = Math.min(1, (now - mixStart) / mixMs);
   if (mix >= 1) A = B;
-  if (!gl) { ctx2d.drawImage(images[B], 0, 0); return; }
-  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex[A]);
-  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, tex[B]);
-  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, tex.mask);
+  if (!gl) { ctx2d.drawImage(room.plate, 0, 0); ctx2d.drawImage(her[B].img, 0, 0); return; }
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, her[A].tex);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, her[B].tex);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, room.plateTex);
+  gl.uniform3f(loc.uTint, ...scene.look.tint);
+  gl.uniform2f(loc.uShadow, ...scene.look.shadow);
+  const lamp = scene.lamp, flick = still ? 1 : 1 + 0.04 * Math.sin(t * 1.7) + 0.025 * Math.sin(t * 5.3 + 1);
+  gl.uniform4f(loc.uLamp, lamp ? lamp.pos[0] : 0, lamp ? lamp.pos[1] : 0, lamp ? lamp.k * flick : 0, 0);
+  gl.uniform3f(loc.uLampRgb, ...(lamp ? lamp.rgb : [0, 0, 0]));
   gl.uniform1f(loc.uMix, mix);
   gl.uniform1f(loc.uT, still ? 0 : t);
   gl.uniform2f(loc.uMouse, still ? 0 : mouse.x, still ? 0 : mouse.y);
@@ -182,11 +215,6 @@ function drawFx(dt, t) {
       fx.arc(p.x, p.y, p.r, 0, 6.283);
       fx.fill();
     }
-  }
-  if (scene.lamp) {
-    fx.globalCompositeOperation = "lighter";
-    radial(scene.lamp[0], scene.lamp[1], 200, "255,190,110", 0.07 + 0.035 * Math.sin(t * 2.1 + Math.sin(t * 7) * 0.6));
-    fx.globalCompositeOperation = "source-over";
   }
   for (let i = 0; i < 5; i++) {
     const age = ((t / 3.2) + i / 5) % 1;
@@ -275,34 +303,54 @@ export function onClockClick(cb) { onClick = cb; }
 
 // ---------------- speech bubble (also on the canvas, so the side panel is the only DOM) ----------------
 export function say(text) { bubble.text = text; bubble.lines = null; bubble.t0 = performance.now(); dirty = true; }
+// The part of the world (x range, world pixels) that is on screen; app.js sets it whenever the layout changes.
+export function setView(x0, x1) { view.x0 = x0; view.x1 = x1; dirty = true; }
 
-function wrap(text) {
+function wrap(text, width) {
   fx.font = BUBBLE.font;
   const lines = [];
   let cur = "";
   for (const ch of text) {
-    if (fx.measureText(cur + ch).width > BUBBLE.w - 2 * BUBBLE.pad) { lines.push(cur); cur = ch; } else cur += ch;
+    // a line may not start with closing punctuation, so it hangs over the right edge instead
+    if (fx.measureText(cur + ch).width > width - 2 * BUBBLE.pad && !NO_LINE_START.includes(ch)) { lines.push(cur); cur = ch; } else cur += ch;
   }
   return cur ? [...lines, cur] : lines;
 }
 
 function drawBubble(now) {
   if (!bubble.text) return;
-  bubble.lines ??= wrap(bubble.text);
-  const { x, y, w, pad, line } = BUBBLE;
+  const { pad, line } = BUBBLE;
+  // Normally the bubble sits left of her head with its tail pointing at her. When the window is narrow and the
+  // room is cropped (view is the part of the world on screen), it moves to the top centre of what is visible.
+  const vw = view.x1 - view.x0;
+  const roomy = view.x0 <= BUBBLE.x - 12 && vw >= 760;
+  const w = roomy ? BUBBLE.w : Math.min(BUBBLE.w, vw - 48);
+  const x = roomy ? BUBBLE.x : view.x0 + (vw - w) / 2;
+  const y = roomy ? BUBBLE.y : 24;
+  if (!bubble.lines || bubble.wrapW !== w) { bubble.wrapW = w; bubble.lines = wrap(bubble.text, w); }
   const h = bubble.lines.length * line + pad * 1.4;
   fx.save();
   fx.globalAlpha = Math.min(1, (now - bubble.t0) / 200);
+  // Body and tail are one path. The outline is stroked first and the opaque fill then covers the inner half of
+  // the stroke, so no line is left across the joint between the body and the tail.
   fx.beginPath();
-  fx.roundRect(x, y, w, h, 22);
-  fx.moveTo(x + w - 2, y + h * 0.55);        // tail towards her head
-  fx.lineTo(x + w + 34, y + h * 0.55 + 26);
-  fx.lineTo(x + w - 2, y + h * 0.55 + 22);
-  fx.fillStyle = "rgba(27,24,48,0.86)";
-  fx.fill();
-  fx.strokeStyle = "rgba(255,255,255,0.18)";
-  fx.lineWidth = 2;
+  fx.roundRect(x, y, w, h, 20);
+  if (roomy) {                               // tail towards her head
+    fx.moveTo(x + w - 4, y + h * 0.55);
+    fx.lineTo(x + w + 30, y + h * 0.55 + 24);
+    fx.lineTo(x + w - 4, y + h * 0.55 + 22);
+  } else {                                   // tail pointing down at her
+    fx.moveTo(x + w / 2 - 14, y + h - 4);
+    fx.lineTo(x + w / 2, y + h + 22);
+    fx.lineTo(x + w / 2 + 14, y + h - 4);
+  }
+  fx.closePath();
+  fx.strokeStyle = "rgba(255,255,255,0.28)";
+  fx.lineWidth = 4;
+  fx.lineJoin = "round";
   fx.stroke();
+  fx.fillStyle = "#1e1b34";
+  fx.fill();
   fx.fillStyle = "#f1ecfa";
   fx.font = BUBBLE.font;
   fx.textBaseline = "top";
@@ -346,7 +394,7 @@ function scheduleBlink() {
 
 function tick(now) {
   requestAnimationFrame(tick);
-  if (!images || now - last < 30) return;
+  if (!her || !room || now - last < 30) return;
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
   if (still && !dirty) return;
@@ -364,6 +412,7 @@ export function mountScene(id) {
   fx = fxc.getContext("2d");
   fx.imageSmoothingQuality = "high";
   initGL($("scene"));
+  loadHer();
   setScene(id);
   addEventListener("pointermove", (e) => {
     mouse.tx = (e.clientX / innerWidth - 0.5) * 2;

@@ -118,42 +118,31 @@ def stickers_layer(neutral, stickers):
     detail = (lum - blur(lum, 6))[..., None] * 0.7              # keep the lid's own glints and grain
     return np.clip(lit + detail, 0, 1), a * lid, sh * lid
 
-# ---------------- masks ----------------
-def girl_mask(s, neutral):
-    alpha = np.asarray(Image.open(src / f"mask_{s}.png").convert("RGBA").getchannel("A"), dtype=np.float32) / 255
-    girl = ss(0.35, 0.65, alpha) * blur(poly_mask(POLY), 10)
-    lum = neutral @ np.array([0.299, 0.587, 0.114], dtype=np.float32)
-    mx, mn = neutral.max(-1), neutral.min(-1)
-    sat = (mx - mn) / np.maximum(mx, 1e-3)
-    yy, xx = np.mgrid[0:941, 0:1672]
-    # left of the sleeve only her hair may be selected: dark and not saturated. The chair (lit wood is saturated),
-    # its blanket and the bed are all excluded, so they stay put when she breathes.
-    left = (xx < 335) & (yy > 430)
-    hairlike = (lum < 0.20) | ((lum < 0.33) & (sat < 0.42))  # warm dusk light makes hair more saturated
-    girl = np.where(left & ~hairlike, 0, girl)
-    girl = blur(ndimage.binary_opening(girl > 0.5, iterations=2) * girl, 1.2)
-    hair = blur(girl * ss(0.40, 0.18, lum), 2)
-    return girl, hair, lum
+def bake(f, sh, lit, cov):
+    f = f * (1 - 0.30 * sh[..., None])
+    return f * (1 - cov[..., None]) + lit * cov[..., None]
 
+# The plate is a model-generated empty room (lap_<scene>.png), used as one whole image. Nothing is drawn over her:
+# the laptop sits far enough from where she rests her arms that she never overlaps it. Her cut-outs (public/char/)
+# are keyed from green-screen frames by keygs.py and are shared by every scene.
+LIDS = {  # TL, TR, BR, BL of the laptop lid in each plate
+    "rain": [(1010, 624), (1274, 599), (1205, 831), (931, 875)],
+    "day": [(951, 624), (1228, 590), (1151, 838), (862, 884)],
+    "dusk": [(996, 634), (1263, 604), (1187, 842), (905, 885)],
+    "snow": [(1019, 621), (1276, 589), (1215, 821), (942, 875)],
+}
 only = sys.argv[1:] or ["rain", "day", "dusk", "snow"]
 stk = cut_stickers()
 for s in only:
     out = pub / s
     out.mkdir(parents=True, exist_ok=True)
-    fr = frames(s)
-    neutral = np.asarray(Image.open(fr["neutral"]).convert("RGB"), dtype=np.float32) / 255
-    lit, cov, sh = stickers_layer(neutral, stk)
-    for name, p in fr.items():
-        if not p.exists():
-            print("missing", p)
-            continue
-        f = np.asarray(Image.open(p).convert("RGB"), dtype=np.float32) / 255
-        f = f * (1 - 0.30 * sh[..., None])
-        f = f * (1 - cov[..., None]) + lit * cov[..., None]
-        Image.fromarray((np.clip(f, 0, 1) * 255).astype(np.uint8)).save(out / f"{name}.webp", quality=88, method=6)
-    girl, hair, _ = girl_mask(s, neutral)
-    m = np.zeros((941, 1672, 3), np.uint8)
-    m[..., 0] = (girl * 255).astype(np.uint8)
-    m[..., 1] = (hair * 255).astype(np.uint8)
-    Image.fromarray(m).save(out / "mask.png", optimize=True)
+    cx = sum(p[0] for p in LIDS[s]) / 4
+    cy = sum(p[1] for p in LIDS[s]) / 4
+    LID[:] = [(cx + (x - cx) * 0.93, cy + (y - cy) * 0.93) for x, y in LIDS[s]]  # inset: the lid corners are rounded
+    room = np.asarray(Image.open(src / f"lap2_{s}.png").convert("RGB"), dtype=np.float32) / 255
+    lit, cov, sh = stickers_layer(room, stk)
+    plate = bake(room, sh, lit, cov)
+    Image.fromarray((np.clip(plate, 0, 1) * 255).astype(np.uint8)).save(out / "plate.webp", quality=90, method=6)
+    for old in ("front.png", "mask.png", "neutral.webp", "happy.webp", "shy.webp", "sleepy.webp", "think.webp", "cheer.webp", "blink.webp"):
+        (out / old).unlink(missing_ok=True)
     print(s, "ok")

@@ -24,6 +24,9 @@ body {
 /* Collapsed: the panel shrinks to its toggle button. It is the only DOM over the canvas scene. */
 #panel.collapsed { bottom: auto; width: auto; height: auto; padding: 6px; overflow: hidden; }
 #panel.collapsed > :not(#bar), #panel.collapsed #scenes { display: none; }
+@media (max-width: 760px) {
+  #panel.collapsed { top: auto; left: auto; right: 8px; bottom: 8px; width: auto; height: auto; }
+}
 #bar { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
 #scenes { display: flex; gap: 6px; flex-wrap: wrap; }
 #scenes button { padding: 2px 10px; }

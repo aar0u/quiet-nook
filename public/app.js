@@ -1,4 +1,4 @@
-import { mountScene, setScene, setExpression, setClock, ringClock, onClockClick, say, EXPRESSIONS, SCENES } from "./char.js";
+import { mountScene, setScene, setExpression, setClock, ringClock, onClockClick, say, setView, EXPRESSIONS, SCENES } from "./char.js";
 
 const $ = (id) => document.getElementById(id);
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
@@ -280,6 +280,7 @@ function layoutWorld() {
   const free = !panelOpen() || narrow ? w : w - 364;
   const ox = Math.min(0, Math.max(w - 1672 * s, free / 2 - 560 * s));
   $("world").style.transform = `translate(${ox}px, ${(h - 941 * s) / 2}px) scale(${s})`;
+  setView(-ox / s, (w - ox) / s);
 }
 addEventListener("resize", layoutWorld);
 for (const s of SCENES) {
