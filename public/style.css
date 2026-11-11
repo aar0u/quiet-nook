@@ -28,9 +28,11 @@ body {
   #panel.collapsed { top: auto; left: auto; right: 8px; bottom: 8px; width: auto; height: auto; }
 }
 #bar { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
-#scenes { display: flex; gap: 6px; flex-wrap: wrap; }
-#scenes button { padding: 2px 10px; }
-#scenes button.active { background: #f4b6a040; border-color: var(--accent); }
+#scenes, #looks { display: flex; gap: 6px; flex-wrap: wrap; }
+#scenes button, #looks button { padding: 2px 10px; }
+#scenes button.active, #looks button.active { background: #f4b6a040; border-color: var(--accent); }
+#lookbar { display: grid; gap: 6px; }
+#lookbar .check { display: flex; gap: 6px; align-items: center; color: var(--dim); font-size: 12px; }
 #hide { border: 0; background: none; color: var(--dim); padding: 2px 8px; }
 #sound .check { justify-content: flex-start; font-size: 12px; }
 #sound .check input { flex: none; }

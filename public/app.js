@@ -1,4 +1,4 @@
-import { mountScene, setScene, setExpression, setClock, ringClock, onClockClick, say, setView, EXPRESSIONS, SCENES } from "./char.js";
+import { mountScene, setScene, setLook, LOOKS, togglePerf, holdBlink, setExpression, setClock, ringClock, onClockClick, say, setView, EXPRESSIONS, SCENES } from "./char.js";
 
 const $ = (id) => document.getElementById(id);
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
@@ -6,6 +6,7 @@ const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } cat
 
 // ---------- timer ----------
 const timer = { mode: "focus", left: 25 * 60, running: false, tick: null, endAt: 0 };
+let lookReady = false;  // set once the scene is mounted; before that a mode change has no look to apply
 const minutes = () => ({ focus: +$("focusMin").value || 25, break: +$("breakMin").value || 5 });
 
 function renderClock() {
@@ -40,6 +41,7 @@ function setMode(mode) {
   timer.running = false;
   clearInterval(timer.tick);
   renderClock();
+  if (lookReady) applyLook();
 }
 
 function onPhaseEnd() {
@@ -174,7 +176,12 @@ function setPanel(open) {
 }
 $("hide").onclick = () => setPanel(!panelOpen());
 addEventListener("keydown", (e) => {
-  if (e.key.toLowerCase() === "h" && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) setPanel(!panelOpen());
+  if (/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+  if (e.key.toLowerCase() === "h") setPanel(!panelOpen());
+  if (e.key.toLowerCase() === "p") togglePerf();
+  // 1-6 show an expression and 0 holds the blink frame for two seconds, to look at the faces
+  if (/^[1-6]$/.test(e.key)) setExpression(EXPRESSIONS[+e.key - 1]);
+  if (e.key === "0") holdBlink(2000);
 });
 
 // ---------- character + chat ----------
@@ -270,7 +277,24 @@ $("chatForm").onsubmit = (e) => {
   speak(text);
 };
 
-mountScene(load("scene", SCENES[0].id));
+// The look she wears is chosen by hand; with autoLook she changes into the bedtime look while the clock is on a break.
+const BREAK_LOOK = "sleep";
+let chosenLook = load("look", LOOKS[0].id);
+$("autoLook").checked = load("autoLook", true);
+$("autoLook").onchange = () => { save("autoLook", $("autoLook").checked); applyLook(); };function applyLook() {
+  const id = $("autoLook").checked && timer.mode === "break" ? BREAK_LOOK : chosenLook;
+  setLook(id).then((shown) => { for (const b of $("looks").children) b.classList.toggle("active", b.dataset.id === chosenLook); return shown; });
+}
+for (const l of LOOKS) {
+  const b = document.createElement("button");
+  b.textContent = l.name;
+  b.dataset.id = l.id;
+  b.onclick = () => { chosenLook = l.id; save("look", l.id); applyLook(); };
+  $("looks").append(b);
+}
+mountScene(load("scene", SCENES[0].id), $("autoLook").checked && timer.mode === "break" ? BREAK_LOOK : chosenLook);
+for (const b of $("looks").children) b.classList.toggle("active", b.dataset.id === chosenLook);
+lookReady = true;
 
 // Scale #world to cover the window and slide it so she (world x = 560) sits in the space the panel leaves free.
 function layoutWorld() {

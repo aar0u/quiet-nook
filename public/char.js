@@ -17,6 +17,14 @@ export const SCENES = [
   { id: "snow", name: "雪夜", fx: "snow", glass: PANES, lamp: { pos: [225, 450], rgb: [1.0, 0.74, 0.44], k: 0.15 }, look: { tint: [0.92, 0.92, 0.98], shadow: [10, 12] } },
 ];
 const FRAMES = [...EXPRESSIONS, "blink"];
+// A look is clothes + hair + pose + a set of faces, one folder public/looks/<id>/: neutral.webp is the whole picture
+// and every other face is a small patch of the face laid over it (faces.json has the patch rectangles).
+export const LOOKS = [
+  { id: "default", name: "居家", fit: [1, 0, 0, 0] },
+  // fit = [scale, anchor x, anchor y, shift x]: keeps this pose's right arm off the laptop screen in every scene
+  { id: "sleep", name: "睡前", fit: [0.88, 270, 784, -30] },
+  { id: "rose", name: "成熟", fit: [1, 0, 0, 0] },
+];
 const MUG = [1300, 658];
 const FADE_MS = 250;
 // The desk clock sits at the left front of the desk, parallel to its front edge (which rises 3.7 degrees to the right).
@@ -30,9 +38,10 @@ const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 let scene = SCENES[0], expr = "neutral", loadToken = 0;
 let gl, loc, ctx2d;
-let her = null;   // her frames {img, tex}, loaded once
+let look = LOOKS[0], looks = {};  // looks[id] = her frames {face: {img, tex}}, loaded on first use
+let her = null;   // the current look's frames
 let room = null;  // the current scene's plate {plate, plateTex}
-let A = "neutral", B = "neutral", mixStart = 0, mixMs = FADE_MS, dirty = true;
+let A = null, B = null, mixStart = 0, mixMs = FADE_MS, dirty = true;
 const mouse = { x: 0, y: 0, tx: 0, ty: 0 };
 let fx, fxc, parts = [], last = 0, blinkTimer;
 const clock = { time: "25:00", mode: "专注", running: false, ringUntil: 0, img: null, meta: null };
@@ -46,11 +55,23 @@ const VS = `attribute vec2 p; varying vec2 uv;
 void main(){ uv = vec2(p.x * .5 + .5, .5 - p.y * .5); gl_Position = vec4(p, 0., 1.); }`;
 // Displacements are in world pixels; uv is the frame, y down. Her frames are premultiplied RGBA, so mixing two of
 // them is a correct cross-fade and "over" is simply her + room * (1 - her.a).
-const FS = `precision mediump float;
+// highp: the shader takes seconds since the page opened as a phase, and in mediump (16-bit on some GPUs) that loses
+// precision as the page stays open, so the motion gets steppy after a long session.
+const FS = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
 uniform sampler2D uA, uB, uPlate; uniform float uMix, uT; uniform vec2 uMouse, uShadow;
-uniform vec3 uTint, uLampRgb; uniform vec4 uLamp;  // uLamp: x, y, k (strength, 0 = off), unused
+uniform vec3 uTint, uLampRgb; uniform vec4 uFit, uLamp;  // uLamp: x, y, k (strength, 0 = off), unused
 varying vec2 uv;
-vec4 her(vec2 p){ return mix(texture2D(uA, p), texture2D(uB, p), uMix); }
+vec4 her(vec2 p){
+  // uFit places the look in the room: scale about an anchor point (px), then shift right by dx px
+  vec2 size = vec2(1672., 941.);
+  vec2 q = (uFit.yz + (p * size - uFit.yz - vec2(uFit.w, 0.)) / uFit.x) / size;
+  return mix(texture2D(uA, q), texture2D(uB, q), uMix);
+}
 void main(){
   vec2 px = uv * vec2(1672., 941.);
   vec2 inv = 1. / vec2(1672., 941.);
@@ -98,7 +119,7 @@ function initGL(canvas) {
   const p = gl.getAttribLocation(prog, "p");
   gl.enableVertexAttribArray(p);
   gl.vertexAttribPointer(p, 2, gl.FLOAT, false, 0, 0);
-  loc = Object.fromEntries(["uA", "uB", "uPlate", "uMix", "uT", "uMouse", "uShadow", "uTint", "uLamp", "uLampRgb"].map((n) => [n, gl.getUniformLocation(prog, n)]));
+  loc = Object.fromEntries(["uA", "uB", "uPlate", "uMix", "uT", "uMouse", "uShadow", "uTint", "uFit", "uLamp", "uLampRgb"].map((n) => [n, gl.getUniformLocation(prog, n)]));
   gl.uniform1i(loc.uA, 0);
   gl.uniform1i(loc.uB, 1);
   gl.uniform1i(loc.uPlate, 2);
@@ -121,10 +142,40 @@ async function decode(src) {
   return img;
 }
 
-async function loadHer() {
-  const imgs = await Promise.all(FRAMES.map((f) => decode(`char/${f}.webp`)));
-  her = Object.fromEntries(FRAMES.map((f, i) => [f, { img: imgs[i], tex: gl ? upload(imgs[i], true) : null }]));
+async function loadLook(l) {
+  if (looks[l.id]) return looks[l.id];
+  const dir = `looks/${l.id}`;
+  const [base, rects] = await Promise.all([decode(`${dir}/neutral.webp`), fetch(`${dir}/faces.json`).then((r) => r.json())]);
+  const names = Object.keys(rects);
+  const patches = await Promise.all(names.map((f) => decode(`${dir}/${f}.webp`)));
+  const frame = (img) => ({ img, tex: gl ? upload(img, true) : null });
+  const set = { neutral: frame(base) };
+  // Every face is neutral with its patch drawn over it, so all pixels outside the patch are identical in every face.
+  names.forEach((f, i) => {
+    const c = document.createElement("canvas");
+    c.width = base.width; c.height = base.height;
+    const g = c.getContext("2d");
+    g.drawImage(base, 0, 0);
+    g.drawImage(patches[i], rects[f][0], rects[f][1]);
+    set[f] = frame(c);
+  });
+  return (looks[l.id] = set);
+}
+
+// Switching look cross-fades from the frame on screen to the new look's current face.
+export async function setLook(id) {
+  const next = LOOKS.find((l) => l.id === id) || LOOKS[0];
+  const set = await loadLook(next);
+  if (next === look && her) return next.id;
+  look = next;
+  her = set;
+  if (B) A = B;
+  B = her[expr] || her.neutral;
+  if (!A) A = B;
+  mixStart = performance.now();
+  mixMs = 700;
   dirty = true;
+  return next.id;
 }
 
 async function loadScene() {
@@ -139,11 +190,12 @@ async function loadScene() {
 function drawScene(now, t) {
   const mix = Math.min(1, (now - mixStart) / mixMs);
   if (mix >= 1) A = B;
-  if (!gl) { ctx2d.drawImage(room.plate, 0, 0); ctx2d.drawImage(her[B].img, 0, 0); return; }
-  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, her[A].tex);
-  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, her[B].tex);
+  if (!gl) { ctx2d.drawImage(room.plate, 0, 0); ctx2d.drawImage(B.img, 0, 0); return; }
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, A.tex);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, B.tex);
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, room.plateTex);
   gl.uniform3f(loc.uTint, ...scene.look.tint);
+  gl.uniform4f(loc.uFit, ...look.fit);
   gl.uniform2f(loc.uShadow, ...scene.look.shadow);
   const lamp = scene.lamp, flick = still ? 1 : 1 + 0.04 * Math.sin(t * 1.7) + 0.025 * Math.sin(t * 5.3 + 1);
   gl.uniform4f(loc.uLamp, lamp ? lamp.pos[0] : 0, lamp ? lamp.pos[1] : 0, lamp ? lamp.k * flick : 0, 0);
@@ -360,9 +412,11 @@ function drawBubble(now) {
 
 // ---------------- state ----------------
 function setFrame(name, ms = FADE_MS) {
-  if (name === B) return;
+  if (!her) return;
+  const f = her[name] || her.neutral;
+  if (f === B) return;
   A = B;
-  B = name;
+  B = f;
   mixStart = performance.now();
   mixMs = ms;
   dirty = true;
@@ -381,6 +435,11 @@ export function setExpression(e) {
   setFrame(expr);
 }
 
+export function holdBlink(ms) {
+  setFrame("blink", 60);
+  setTimeout(() => setFrame(expr, FADE_MS), ms);
+}
+
 // She blinks only from the neutral face; the blink frame is neutral with closed eyes.
 function scheduleBlink() {
   blinkTimer = setTimeout(() => {
@@ -394,25 +453,46 @@ function scheduleBlink() {
 
 function tick(now) {
   requestAnimationFrame(tick);
-  if (!her || !room || now - last < 30) return;
+  if (!her || !room || now - last < 8) return;  // a frame costs under 1 ms, so draw at the display rate (capped near 120 fps)
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
   if (still && !dirty) return;
   mouse.x += (mouse.tx - mouse.x) * 0.06;
   mouse.y += (mouse.ty - mouse.y) * 0.06;
+  const t0 = performance.now();
   drawScene(now, now / 1000);
+  if (perf.on && gl) gl.finish();  // wait for the GPU so the number below is its real cost; only while measuring
+  const t1 = performance.now();
   drawFx(still ? 0 : dt, now / 1000);
   drawClock(now / 1000, now);
   drawBubble(now);
+  if (perf.on) drawPerf(now, t1 - t0, performance.now() - t1);
   dirty = false;
 }
 
-export function mountScene(id) {
+// Press P (or open the page with ?perf) to see what a frame costs on this machine.
+const perf = { on: /[?&]perf\b/.test(location.search), gpu: 0, cpu: 0, frames: 0, t0: 0, fps: 0 };
+function drawPerf(now, gpu, cpu) {
+  perf.gpu += (gpu - perf.gpu) * 0.05;
+  perf.cpu += (cpu - perf.cpu) * 0.05;
+  perf.frames++;
+  if (now - perf.t0 > 1000) { perf.fps = perf.frames * 1000 / (now - perf.t0); perf.frames = 0; perf.t0 = now; }
+  fx.save();
+  fx.font = "20px monospace";
+  fx.fillStyle = "#000a";
+  fx.fillRect(view.x0 + 10, 10, 420, 36);
+  fx.fillStyle = "#9f9";
+  fx.fillText(`${perf.fps.toFixed(0)} fps  scene ${perf.gpu.toFixed(1)} ms  2d ${perf.cpu.toFixed(1)} ms`, view.x0 + 20, 36);
+  fx.restore();
+}
+export function togglePerf() { perf.on = !perf.on; dirty = true; }
+
+export function mountScene(id, lookId = LOOKS[0].id) {
   fxc = $("fx");
   fx = fxc.getContext("2d");
   fx.imageSmoothingQuality = "high";
   initGL($("scene"));
-  loadHer();
+  setLook(lookId);
   setScene(id);
   addEventListener("pointermove", (e) => {
     mouse.tx = (e.clientX / innerWidth - 0.5) * 2;
