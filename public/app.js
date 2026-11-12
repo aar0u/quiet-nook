@@ -1,6 +1,7 @@
 import { mountScene, setScene, setLook, LOOKS, ROOMS, setExpression as showExpression, setClock, ringClock, onClockClick, say, setView, EXPRESSIONS, SCENES } from "./char.js";
 
 const $ = (id) => document.getElementById(id);
+const APP_TITLE = "Quiet Nook";
 let currentExpression = "neutral";
 function setExpression(expression) {
   currentExpression = EXPRESSIONS.includes(expression) ? expression : "neutral";
@@ -19,7 +20,7 @@ function renderClock() {
   const text = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
   setClock({ time: text, mode: timer.mode === "focus" ? "专注" : "休息", running: timer.running });
   $("start").textContent = timer.running ? "暂停" : "开始";
-  document.title = timer.running ? `${text} 念念的小屋` : "念念的小屋";
+  document.title = timer.running ? `${text} ${APP_TITLE}` : APP_TITLE;
 }
 
 // The alarm clock on the desk rings when a phase ends: it shakes and beeps three times.
@@ -53,7 +54,7 @@ function onPhaseEnd() {
   const finished = timer.mode;
   setMode(finished === "focus" ? "break" : "focus");
   ring();
-  try { new Notification("念念的小屋", { body: finished === "focus" ? "专注结束，休息一下" : "休息结束" }); } catch { /* no permission */ }
+  try { new Notification(APP_TITLE, { body: finished === "focus" ? "专注结束，休息一下" : "休息结束" }); } catch { /* no permission */ }
   speak(finished === "focus"
     ? "[系统事件] 一个专注时段刚结束，进入休息。请简短问候并问一句刚才做得怎么样。"
     : "[系统事件] 休息结束，新的专注时段即将开始。请简短鼓励一句。", true);
@@ -184,6 +185,7 @@ function setPanel(open) {
 $("hide").onclick = () => setPanel(!panelOpen());
 addEventListener("keydown", (e) => {
   if (e.ctrlKey || e.altKey || e.metaKey || e.repeat || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+  if (e.key.toLowerCase() === "c") setPanel(!panelOpen());
   if (e.key === "1") setExpression(EXPRESSIONS[(EXPRESSIONS.indexOf(currentExpression) + 1) % EXPRESSIONS.length]);
   if (e.key === "2") {
     const scenes = SCENES.filter((s) => s.room === activeRoom);
@@ -201,15 +203,14 @@ addEventListener("keydown", (e) => {
 });
 
 // ---------- character + chat ----------
-const SYSTEM = `你是「念念」，是用户的女朋友，在房间里陪用户专注工作和学习。
+const SYSTEM = `你是「阿宁」，是用户的女朋友，在房间里陪用户专注工作和学习。
 性格：温柔、体贴、有点害羞，偶尔小小地撒娇或调侃，不说教，不啰嗦。
 称呼：直接说"你"，不要猜测或使用用户的性别和昵称，除非用户自己说过。
 规则：
 - 每次回复 1 到 3 句中文，口语化，除非用户明确要求详细。
 - 回复第一个词必须是情绪标签，从 [neutral] [happy] [shy] [sleepy] [think] [cheer] 里选一个，之后接正文。大多数时候用 [neutral]，只有情绪明显时才用别的，不要总是 [happy]；被夸、被撒娇或有点不好意思时用 [shy]。
 - 闹钟由你操作。用户说要开始专注、学习、工作时，在回复末尾加 [start]；说要休息时加 [break]；说要暂停加 [pause]；说要重来加 [reset]。只在用户明确表达时才加，不要自己决定，也不要重复加。标签放在情绪标签之后、正文末尾，不要解释它。
-- 用户在专注时不要主动打扰；用户正在休息或主动开口时才多聊。
-- 关心用户的状态，该休息就提醒休息，鼓励用户照顾好自己和现实中的生活，不要黏人，也不要让用户觉得离不开你。
+- 关心用户的状态。
 - 你不是医生或心理咨询师。用户提到自伤或严重情绪困扰时，温和地表示关心，并建议联系身边的人或当地的心理援助热线，不要给诊断。
 - 不要编造你看不到的信息。你只知道下面的"当前状态"。`;
 

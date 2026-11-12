@@ -1,20 +1,48 @@
 export const EXPRESSIONS = ["neutral", "happy", "shy", "sleepy", "think", "cheer"];
 export const ROOMS = [{ id: "floor", name: "地毯" }, { id: "desk", name: "书桌" }];
-const PANES = [[773, 0, 127, 480], [947, 0, 320, 493]];
+const PANES = [[964, 165, 266, 365], [1267, 145, 270, 385]];
 export const SCENES = [
   { id: "day4", room: "floor", name: "午后", src: "art/afternoon.png", look: { tint: [1.0, 0.98, 0.94], shadow: [-10, 12] }, clock: [161, 825, 23, 85, 780, 230, 870] },
-  { id: "day", room: "desk", name: "午后", fx: "dust", dust: "255,240,200", look: { tint: [1.0, 0.98, 0.94], shadow: [-10, 12] } },
-  { id: "dusk", room: "desk", name: "黄昏", fx: "dust", dust: "255,205,150", lamp: { pos: [225, 455], rgb: [1.0, 0.66, 0.3], k: 0.14 }, look: { tint: [1.0, 0.86, 0.74], shadow: [-8, 12] } },
-  { id: "rain", room: "desk", name: "雨夜", fx: "rain", glass: PANES, lamp: { pos: [225, 455], rgb: [1.0, 0.72, 0.4], k: 0.16 }, look: { tint: [0.9, 0.9, 0.97], shadow: [10, 12] } },
-  { id: "snow", room: "desk", name: "雪夜", fx: "snow", glass: PANES, lamp: { pos: [225, 450], rgb: [1.0, 0.74, 0.44], k: 0.15 }, look: { tint: [0.92, 0.92, 0.98], shadow: [10, 12] } },
+  { id: "day", room: "desk", name: "午后", noSteam: true, fx: "dust", dust: "255,240,200", look: { tint: [1.0, 0.98, 0.94], shadow: [-10, 12] } },
+  { id: "dusk", room: "desk", name: "黄昏", fx: "dust", dust: "255,205,150", lamp: { pos: [150, 560], rgb: [1.0, 0.66, 0.3], k: 0.14 }, look: { tint: [1.0, 0.86, 0.74], shadow: [-8, 12] } },
+  { id: "rain", room: "desk", name: "雨夜", fx: "rain", glass: PANES, lamp: { pos: [150, 560], rgb: [1.0, 0.72, 0.4], k: 0.16 }, look: { tint: [0.9, 0.9, 0.97], shadow: [10, 12] } },
+  { id: "snow", room: "desk", name: "雪夜", fx: "snow", glass: PANES, lamp: { pos: [150, 560], rgb: [1.0, 0.74, 0.44], k: 0.15 }, look: { tint: [0.92, 0.92, 0.98], shadow: [10, 12] } },
 ];
+const CLOCK_LIGHTS = {
+  day: { shade: 0, rgb: [255, 210, 155], glow: 0.04 },
+  dusk: { shade: 0.08, rgb: [255, 150, 75], glow: 0.16 },
+  rain: { shade: 0.14, rgb: [255, 165, 100], glow: 0.14 },
+  snow: { shade: 0.12, rgb: [255, 185, 125], glow: 0.12 },
+};
 export const LOOKS = [
-  { id: "default", room: "floor", name: "托腮", src: "art/cheek.png", fit: [0.72, 600, 700, -120] },
-  { id: "wrist2", room: "floor", name: "轻搭", src: "art/rest.png", fit: [0.72, 600, 700, -120] },
-  { id: "desk-default", room: "desk", name: "居家", dir: "default", fit: [1, 0, 0, 0] },
-  { id: "desk-sleep", room: "desk", name: "睡前", dir: "sleep", fit: [0.88, 270, 784, -30], when: "break" },
-  { id: "desk-rose", room: "desk", name: "成熟", dir: "rose", fit: [1, 0, 0, 0] },
+  { id: "default", room: "floor", name: "托腮", src: "art/cheek.webp", fit: [0.72, 600, 700, -120] },
+  { id: "wrist2", room: "floor", name: "轻搭", src: "art/rest.webp", fit: [0.72, 600, 700, -120] },
+  { id: "desk-default", room: "desk", name: "居家", src: "looks/default/neutral.webp", faces: "looks/default", fullFaces: true, fit: [0.82, 0, 520, 52] },
+  { id: "desk-rose", room: "desk", name: "外出", src: "looks/rose/neutral.webp", faces: "looks/rose", fullFaces: true, fit: [0.95, 0, 120, 158] },
+  { id: "desk-sleep", room: "desk", name: "睡前", src: "looks/sleep/neutral.webp", faces: "looks/sleep", fullFaces: true, fit: [0.7, 0, 686, 191], when: "break" },
 ];
+const FACE_LAYOUTS = {
+  "looks/default": {
+    blinkOrigin: [430, 220], blinkRects: [[430, 245, 105, 80], [548, 220, 105, 83]],
+    blinkPolygons: [
+      [[445, 245], [535, 245], [535, 325], [440, 325], [430, 300], [430, 280], [440, 260]],
+      [[548, 220], [620, 220], [640, 235], [649, 250], [653, 265], [645, 280], [630, 303], [548, 303]],
+    ],
+  },
+  "looks/rose": { blinkOrigin: [300, 285], blinkRects: [[300, 300, 75, 55], [400, 285, 85, 60]] },
+  "looks/sleep": {
+    blinkOrigin: [350, 370], blinkRects: [[350, 425, 100, 65], [475, 370, 105, 70]],
+    blinkPolygons: [
+      [[365, 438], [390, 429], [425, 432], [437, 440], [438, 466], [425, 478], [395, 486], [370, 481], [355, 472], [355, 452]],
+      [[490, 382], [515, 371], [550, 374], [565, 385], [568, 401], [558, 416], [535, 426], [510, 429], [488, 421], [481, 410], [482, 395]],
+    ],
+  },
+};
+// Some generated frames need alignment to the neutral sprite before cross-fading.
+const FULL_FRAME_FITS = {
+  "looks/rose": { happy: [0.7809, -263.1, 114.6], think: [0.9363, 17.5, 16.3] },
+  "looks/sleep": { sleepy: [0.8002, -178.5, 123.2] },
+};
 const FADE_MS = 250;
 const NO_LINE_START = "，。！？、；：）」』”…～,.!?;:)";
 const BUBBLE = { x: 24, y: 70, w: 340, pad: 20, line: 34, font: "23px system-ui, 'PingFang SC', 'Noto Sans CJK SC', sans-serif" };
@@ -131,26 +159,55 @@ async function decode(src) {
 async function loadLook(l) {
   if (looks[l.id]) return looks[l.id];
   const frame = (img) => ({ img, tex: gl ? upload(img, true) : null });
-  if (l.src) {
-    const img = await decode(l.src);
-    return (looks[l.id] = { neutral: frame(img) });
+  const img = await decode(l.src);
+  const set = { neutral: frame(img) };
+  if (l.fullFaces) {
+    const names = EXPRESSIONS.filter((name) => name !== "neutral");
+    const variants = await Promise.all(names.map((name) => decode(`${l.faces}/${name}.webp`)));
+    names.forEach((name, i) => {
+      const fit = FULL_FRAME_FITS[l.faces]?.[name];
+      if (!fit) { set[name] = frame(variants[i]); return; }
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width; canvas.height = img.height;
+      const [scale, x, y] = fit;
+      canvas.getContext("2d").drawImage(variants[i], x, y, variants[i].width * scale, variants[i].height * scale);
+      set[name] = frame(canvas);
+    });
   }
-  const dir = `looks/${l.dir}`;
-  const [base, rects] = await Promise.all([decode(`${dir}/neutral.webp`), fetch(`${dir}/faces.json`).then((r) => {
-    if (!r.ok) throw new Error(`Cannot load ${dir}/faces.json`);
-    return r.json();
-  })]);
-  const names = Object.keys(rects);
-  const patches = await Promise.all(names.map((name) => decode(`${dir}/${name}.webp`)));
-  const set = { neutral: frame(base) };
-  names.forEach((name, i) => {
+  if (l.faces) {
+    const layout = FACE_LAYOUTS[l.faces], variant = await decode(`${l.faces}/blink.webp`);
     const canvas = document.createElement("canvas");
-    canvas.width = base.width; canvas.height = base.height;
+    canvas.width = img.width; canvas.height = img.height;
     const ctx = canvas.getContext("2d");
-    ctx.drawImage(base, 0, 0);
-    ctx.drawImage(patches[i], rects[name][0], rects[name][1]);
-    set[name] = frame(canvas);
-  });
+    ctx.drawImage(img, 0, 0);
+    for (const [index, [x, y, w, h]] of layout.blinkRects.entries()) {
+      const patch = document.createElement("canvas");
+      patch.width = w; patch.height = h;
+      const pc = patch.getContext("2d");
+      const [sourceX, sourceY] = layout.blinkOrigin;
+      pc.drawImage(variant, x - sourceX, y - sourceY, w, h, 0, 0, w, h);
+      pc.globalCompositeOperation = "destination-in";
+      for (const [dx, dy, size] of [[w, 0, w], [0, h, h]]) {
+        const gradient = pc.createLinearGradient(0, 0, dx, dy);
+        gradient.addColorStop(0, "transparent");
+        gradient.addColorStop(6 / size, "black");
+        gradient.addColorStop(1 - 6 / size, "black");
+        gradient.addColorStop(1, "transparent");
+        pc.fillStyle = gradient;
+        pc.fillRect(0, 0, w, h);
+      }
+      if (layout.blinkPolygons) {
+        const points = layout.blinkPolygons[index];
+        pc.beginPath();
+        points.forEach(([px, py], i) => i ? pc.lineTo(px - x, py - y) : pc.moveTo(px - x, py - y));
+        pc.closePath();
+        pc.fillStyle = "black";
+        pc.fill();
+      }
+      ctx.drawImage(patch, x, y);
+    }
+    set.blink = frame(canvas);
+  }
   return (looks[l.id] = set);
 }
 
@@ -170,20 +227,34 @@ export async function setLook(id) {
   return next.id;
 }
 
+function lightClock(img, light) {
+  if (!light) return img;
+  const canvas = document.createElement("canvas");
+  canvas.width = img.width; canvas.height = img.height;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0);
+  ctx.globalCompositeOperation = "source-atop";
+  ctx.fillStyle = `rgba(0,0,0,${light.shade})`;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const gradient = ctx.createRadialGradient(canvas.width * 0.55, 0, 0, canvas.width * 0.55, 0, canvas.width * 0.75);
+  const [r, g, b] = light.rgb;
+  gradient.addColorStop(0, `rgba(${r},${g},${b},${light.glow})`);
+  gradient.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
 async function loadScene() {
   const token = ++loadToken;
   const selected = scene;
-  const [plate, clockImg, clockMeta] = await Promise.all([
+  const [plate, clockImg] = await Promise.all([
     decode(selected.src || `scene/${selected.id}/plate.webp`),
-    selected.room === "desk" ? decode(`props/clock_${selected.id}.webp`) : null,
-    selected.room === "desk" ? fetch("props/clock.json").then((r) => {
-      if (!r.ok) throw new Error("Cannot load clock metadata");
-      return r.json();
-    }) : null,
+    selected.room === "desk" ? decode("props/clock.png") : null,
   ]);
   if (token !== loadToken) return;  // a newer scene was picked while loading
   if (gl && room) gl.deleteTexture(room.plateTex);
-  room = { id: selected.id, plate, plateTex: gl ? upload(plate, false) : null, clockImg, clockMeta: clockMeta?.[selected.id] };
+  room = { id: selected.id, plate, plateTex: gl ? upload(plate, false) : null, clockImg: clockImg && lightClock(clockImg, CLOCK_LIGHTS[selected.id]) };
   dirty = true;
 }
 
@@ -264,9 +335,9 @@ function drawFx(dt, t) {
       fx.beginPath(); fx.arc(p.x, p.y, p.r, 0, 6.283); fx.fill();
     }
   }
-  for (let i = 0; i < 5; i++) {
+  if (!scene.noSteam) for (let i = 0; i < 5; i++) {
     const age = (t / 3.2 + i / 5) % 1;
-    const x = 1300 + Math.sin(age * 5 + i * 2) * 9, y = 658 - age * 85, r = 7 + age * 17;
+    const x = 1325 + Math.sin(age * 5 + i * 2) * 9, y = 715 - age * 85, r = 7 + age * 17;
     const alpha = 0.13 * (1 - age) * Math.min(1, age * 8);
     const g = fx.createRadialGradient(x, y, 0, x, y, r);
     g.addColorStop(0, `rgba(255,255,255,${alpha})`);
@@ -301,46 +372,38 @@ function softEllipse(rx, ry, rgb, alpha) {
   fx.restore();
 }
 
+const DESK_CLOCK = { x: 56, y: 910, width: 175 };
+
 function drawDeskClock(t, now) {
-  if (!room.clockImg || !room.clockMeta) return;
-  const meta = room.clockMeta, w = 175, h = w / meta.aspect;
+  if (!room.clockImg) return;
+  const w = DESK_CLOCK.width, h = w * room.clockImg.height / room.clockImg.width;
   const ring = now < clock.ringUntil && !still;
   fx.save();
-  fx.translate(56 + w / 2, 905);
-  fx.rotate((-3.7 - meta.slope + (ring ? Math.sin(t * 50) * 2.5 : 0)) * Math.PI / 180);
+  fx.translate(DESK_CLOCK.x + w / 2, DESK_CLOCK.y);
+  fx.rotate(ring ? Math.sin(t * 50) * 2.5 * Math.PI / 180 : 0);
   softEllipse(w * 0.85, 18, "0,0,0", 0.28);
   softEllipse(w * 0.5, 8, "0,0,0", 0.3);
-  for (const [x, y] of meta.feet) {
-    fx.save();
-    fx.translate(x * w - w / 2, y * h - h);
-    softEllipse(w * 0.09, 4.5, "0,0,0", 0.85);
-    fx.restore();
-  }
   fx.drawImage(room.clockImg, -w / 2, -h + 1, w, h);
-  const [tl, tr, , bl] = meta.quad.map(([x, y]) => [x * w - w / 2, y * h - h]);
-  const lw = 120, lh = 44;
-  fx.transform((tr[0] - tl[0]) / lw, (tr[1] - tl[1]) / lw, (bl[0] - tl[0]) / lh, (bl[1] - tl[1]) / lh, tl[0], tl[1]);
+  fx.fillStyle = "#141313";
+  fx.beginPath();
+  fx.roundRect(-w * 0.44, -h * 0.785 + 1, w * 0.87, h * 0.625, h * 0.1);
+  fx.fill();
   const lit = clock.running || (ring && Math.floor(t * 5) % 2 === 0);
   fx.fillStyle = "#ffb561";
   fx.shadowColor = "rgba(255,154,60,0.7)";
   fx.shadowBlur = lit ? 6 : 0;
   fx.textAlign = "center";
   fx.textBaseline = "middle";
-  fx.globalAlpha = lit ? 0.8 : 0.45;
-  fx.font = "9px ui-monospace, 'DejaVu Sans Mono', monospace";
-  fx.fillText(clock.mode.split("").join(" "), lw / 2, 8);
   fx.globalAlpha = lit ? 1 : 0.55;
-  fx.font = "600 27px ui-monospace, 'DejaVu Sans Mono', monospace";
-  fx.fillText(clock.time, lw / 2, 28);
+  fx.font = "600 30px ui-monospace, 'DejaVu Sans Mono', monospace";
+  fx.fillText(clock.time, -w * 0.005, -h * 0.435 + 1);
   fx.restore();
 }
 
 function hitClock(x, y) {
   if (scene.room === "desk") {
-    const w = 175, h = w / (room?.clockMeta?.aspect || 1.7), a = -3.7 * Math.PI / 180;
-    const dx = x - (56 + w / 2), dy = y - 905;
-    const lx = dx * Math.cos(a) + dy * Math.sin(a), ly = -dx * Math.sin(a) + dy * Math.cos(a);
-    return Math.abs(lx) < w / 2 && ly > -h && ly < 4;
+    const w = DESK_CLOCK.width, h = w * (room?.clockImg ? room.clockImg.height / room.clockImg.width : 2 / 3);
+    return x >= DESK_CLOCK.x && x <= DESK_CLOCK.x + w && y > DESK_CLOCK.y - h && y < DESK_CLOCK.y + 4;
   }
   const [, , , left, top, right, bottom] = scene.clock;
   return x >= left && x <= right && y >= top && y <= bottom;
@@ -419,7 +482,7 @@ function setFrame(name, ms = FADE_MS) {
   if (f === B) return;
   A = B;
   B = f;
-  mixStart = performance.now();
+  mixStart = performance.now() - (still ? ms : 0);
   mixMs = ms;
   dirty = true;
 }
@@ -433,14 +496,15 @@ export function setScene(id) {
 
 export function setExpression(e) {
   expr = EXPRESSIONS.includes(e) ? e : "neutral";
-  setFrame(expr);
+  setFrame(expr, look.fullFaces ? 100 : FADE_MS);
 }
 
 function scheduleBlink() {
   setTimeout(() => {
     if (look.room === "desk" && expr === "neutral" && !document.hidden) {
-      setFrame("blink", 60);
-      setTimeout(() => { if (look.room === "desk" && expr === "neutral") setFrame("neutral", 90); }, 140);
+      const patched = Boolean(look.faces);
+      setFrame("blink", patched ? 90 : 60);
+      setTimeout(() => { if (look.room === "desk" && expr === "neutral") setFrame("neutral", patched ? 130 : 90); }, patched ? 200 : 140);
     }
     scheduleBlink();
   }, rand(2500, 6000));

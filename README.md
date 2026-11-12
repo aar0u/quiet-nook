@@ -9,12 +9,12 @@ A cozy desktop study companion with two rooms: a floor-seated afternoon scene an
 ## Features
 
 - The floor room has one afternoon scene and two static poses, 托腮 and 轻搭. Its character and room are separate images.
-- The desk room has afternoon, dusk, rainy night and snowy night scenes, plus the original 居家, 睡前 and 成熟 looks. The desk character breathes, blinks and changes expression.
+- The desk room has afternoon, dusk, rainy night and snowy night scenes, plus the 居家, 外出 and 睡前 looks. The desk character breathes, blinks and changes expression.
 - A pomodoro timer appears on the floor or desk. Click the clock to start or pause. It beeps when a phase ends.
 - Stickers on the desk room's laptop lid, baked into each scene image with the lid's perspective and lighting.
 - The whole room, including the clock and her speech bubble, is canvas. The side panel is the only DOM element over it.
 - She can operate the clock: say "I'm going to focus for a while" and she starts it.
-- Chat with her. She sees the timer state and your to-do list, and stays quiet while you focus.
+- Chat with her. She sees the timer state and your to-do list.
 - Synthesized rain and brown noise, no audio files.
 - Everything is stored in the browser (`localStorage`). There is no account and no server-side state.
 
@@ -29,7 +29,7 @@ npm start                      # http://127.0.0.1:7777
 
 `./run.sh` starts the server and opens it as a standalone app window with Chromium or Chrome (`--app`).
 
-Controls: use the room, scene and pose buttons at the top of the panel. Click the clock to start or pause. Keys `1`, `2` and `3` cycle expressions, scenes and poses respectively. The floor poses do not yet have expression assets.
+Controls: use the room, scene and pose buttons at the top of the panel. Click the clock to start or pause. Keys `1`, `2` and `3` cycle expressions, scenes and poses respectively; `C` opens or closes the side panel. The floor poses do not yet have expression assets.
 
 ## Chat backends
 
@@ -48,33 +48,22 @@ The server listens on `127.0.0.1` only. Set `HOST=0.0.0.0` only if you understan
 ```
 public/
   art/                       the floor room and its two transparent character sprites
-  scene/<scene>/plate.webp   the empty room, with the chair and the desk behind where she sits
-  looks/<look>/              desk-room looks shared by its four scenes: neutral.webp is
-                             the whole transparent cut-out of her, the other faces are small patches of just the
-                             face (faces.json has their rectangles) that char.js lays over it
-  props/                     one alarm clock sprite per scene, and clock.json (corners of its glass)
+  scene/<scene>/plate.webp   the empty desk room, including its desk
+  looks/<look>/              full transparent sprites for neutral and emotion expressions;
+                             blink.webp is an eye patch applied to the neutral sprite
+  props/clock.png            the shared, independently rendered desk clock sprite
   char.js                    WebGL: room plate and character; a 2D canvas draws weather, clocks and speech
   app.js                 timer, to-do list, sound, chat, side panel
 server.js, backends.js   static server and the chat proxy
-tools/                   scripts used to build the art, see below
 ```
 
 She answers in a fixed format: an expression tag (`[neutral]`, `[happy]`, `[shy]`, `[sleepy]`, `[think]`, `[cheer]`), the text, and optionally an action tag (`[start]`, `[break]`, `[pause]`, `[reset]`) that the page executes on the clock. The system prompt is in `public/app.js`.
 
 ## Art pipeline
 
-The images were generated with an AI image model (`gpt-image-2`) and are not hand drawn. The scripts in `tools/` describe the older desk-room pipeline and were written for the author's machine, so expect to edit paths:
+The images were generated with an AI image model and are not hand drawn. Approved composition and expression line drawings are in `docs/reference/`. Review a new line drawing before generating artwork when the composition or pose changes. Keep the desk clock separate from the room plate.
 
-- `gen.py`: one image edit or generation through a local opencode service.
-- `build.py`: bakes the laptop stickers into each generated empty room and writes `public/scene/<scene>/plate.webp`. The laptop corners are measured by hand for each room. The stickers come from one generated sticker sheet.
-- `makelook.py` makes a look: `uv run tools/makelook.py step|pick|faces|build|status <look>`. She is generated with a real alpha channel (`background: transparent` in the image request). `step` and `pick` produce the neutral picture in a few steps with candidates you choose from, `faces` makes the six faces from it (a refused request is retried, never reworded), and `build` writes `public/looks/<look>/` and its entry in `public/looks/looks.json`, then checks the result. The prompts and the rules the model needed (no furniture, keep the eyes, mouth style, no teeth in a yawn, sleeve edge) are in `tools/looks/common.json`, and each look has `tools/looks/<look>.json`. Sources go in `art-src/looks/<look>/`.
-- To add a look: write `tools/looks/<id>.json` (copy `rose.json`), then `step`, `pick` for each step, `faces`, `build`. The page picks it up from `looks.json`; `"when": "break"` makes it the look worn during a break.
-- `trbuild.py`: used by `makelook.py build`. It aligns every face to neutral and computes one face region per look, cut along the face and including the brow band, so that a seam never crosses a brow, lid, lip or the edge of the hair. `check` fails the build if feature changes lie outside that region or the silhouette grows.
-- `keygs.py`, `score.py`, `pick.py`: the older green-screen route, no longer used for her. `keygs.py` solves alpha and colour from the screen colour; it left light and dark fringes on thin hair that flickered when she moved.
-- `clockbuild.py`: keys the clock sprites and measures the corners of each clock's display.
-- `cdp_t.mjs`: drives a Chrome DevTools Protocol endpoint for screenshots.
-
-The source images are not in the repository because they are about 75 MB.
+Desk looks and placement are defined in `public/char.js`. Use complete transparent, lossless WebP sprites for neutral and emotion expressions. Create blinking from the neutral sprite by applying only the eyes from a reviewed candidate with soft edges; check alignment, seams and flicker in the page. Keep the existing asset names.
 
 ## Limits
 
