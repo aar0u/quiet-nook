@@ -1,6 +1,11 @@
-import { mountScene, setScene, setLook, LOOKS, togglePerf, holdBlink, setExpression, setClock, ringClock, onClockClick, say, setView, EXPRESSIONS, SCENES } from "./char.js";
+import { mountScene, setScene, setLook, LOOKS, ROOMS, setExpression as showExpression, setClock, ringClock, onClockClick, say, setView, EXPRESSIONS, SCENES } from "./char.js";
 
 const $ = (id) => document.getElementById(id);
+let currentExpression = "neutral";
+function setExpression(expression) {
+  currentExpression = EXPRESSIONS.includes(expression) ? expression : "neutral";
+  showExpression(currentExpression);
+}
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage blocked */ } };
 
@@ -153,13 +158,15 @@ for (const name of SOUNDS) {
 }
 
 // ---------- scene, panel visibility ----------
-const SCENE_SOUND = { rain: { rain: 60, brown: 20 }, day: { rain: 0, brown: 15 }, dusk: { rain: 0, brown: 10 }, snow: { rain: 0, brown: 35 } };
+const SCENE_SOUND = { day4: { rain: 0, brown: 15 }, day: { rain: 0, brown: 15 }, dusk: { rain: 0, brown: 10 }, rain: { rain: 60, brown: 20 }, snow: { rain: 0, brown: 35 } };
+let activeRoom = ROOMS.some((r) => r.id === load("room", "floor")) ? load("room", "floor") : "floor";
 $("autoSound").checked = load("autoSound", true);
 $("autoSound").onchange = () => save("autoSound", $("autoSound").checked);
 
 function pickScene(id) {
   id = setScene(id);
   save("scene", id);
+  save(`scene:${activeRoom}`, id);
   for (const b of $("scenes").children) b.classList.toggle("active", b.dataset.id === id);
   if ($("autoSound").checked) {
     for (const name of SOUNDS) { $(name).value = SCENE_SOUND[id][name]; applyVolume(name); }
@@ -170,28 +177,37 @@ const panelOpen = () => !$("panel").classList.contains("collapsed");
 function setPanel(open) {
   $("panel").classList.toggle("collapsed", !open);
   $("hide").textContent = open ? "✕" : "☰";
-  $("hide").title = open ? "收起面板 (H)" : "展开面板 (H)";
+  $("hide").title = open ? "收起面板" : "展开面板";
   save("panelOpen", open);
   layoutWorld();
 }
 $("hide").onclick = () => setPanel(!panelOpen());
 addEventListener("keydown", (e) => {
-  if (/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
-  if (e.key.toLowerCase() === "h") setPanel(!panelOpen());
-  if (e.key.toLowerCase() === "p") togglePerf();
-  // 1-6 show an expression and 0 holds the blink frame for two seconds, to look at the faces
-  if (/^[1-6]$/.test(e.key)) setExpression(EXPRESSIONS[+e.key - 1]);
-  if (e.key === "0") holdBlink(2000);
+  if (e.ctrlKey || e.altKey || e.metaKey || e.repeat || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+  if (e.key === "1") setExpression(EXPRESSIONS[(EXPRESSIONS.indexOf(currentExpression) + 1) % EXPRESSIONS.length]);
+  if (e.key === "2") {
+    const scenes = SCENES.filter((s) => s.room === activeRoom);
+    const index = scenes.findIndex((s) => s.id === load("scene", scenes[0].id));
+    pickScene(scenes[(index + 1) % scenes.length].id);
+  }
+  if (e.key === "3") {
+    const options = LOOKS.filter((l) => l.room === activeRoom);
+    const index = options.findIndex((l) => l.id === chosenLook);
+    chosenLook = options[(index + 1) % options.length].id;
+    save("look", chosenLook);
+    save(`look:${activeRoom}`, chosenLook);
+    applyLook();
+  }
 });
 
 // ---------- character + chat ----------
-const SYSTEM = `你是「念念」，是用户的女朋友，坐在书桌旁陪用户专注工作和学习。
+const SYSTEM = `你是「念念」，是用户的女朋友，在房间里陪用户专注工作和学习。
 性格：温柔、体贴、有点害羞，偶尔小小地撒娇或调侃，不说教，不啰嗦。
 称呼：直接说"你"，不要猜测或使用用户的性别和昵称，除非用户自己说过。
 规则：
 - 每次回复 1 到 3 句中文，口语化，除非用户明确要求详细。
 - 回复第一个词必须是情绪标签，从 [neutral] [happy] [shy] [sleepy] [think] [cheer] 里选一个，之后接正文。大多数时候用 [neutral]，只有情绪明显时才用别的，不要总是 [happy]；被夸、被撒娇或有点不好意思时用 [shy]。
-- 桌上的闹钟由你操作。用户说要开始专注、学习、工作时，在回复末尾加 [start]；说要休息时加 [break]；说要暂停加 [pause]；说要重来加 [reset]。只在用户明确表达时才加，不要自己决定，也不要重复加。标签放在情绪标签之后、正文末尾，不要解释它。
+- 闹钟由你操作。用户说要开始专注、学习、工作时，在回复末尾加 [start]；说要休息时加 [break]；说要暂停加 [pause]；说要重来加 [reset]。只在用户明确表达时才加，不要自己决定，也不要重复加。标签放在情绪标签之后、正文末尾，不要解释它。
 - 用户在专注时不要主动打扰；用户正在休息或主动开口时才多聊。
 - 关心用户的状态，该休息就提醒休息，鼓励用户照顾好自己和现实中的生活，不要黏人，也不要让用户觉得离不开你。
 - 你不是医生或心理咨询师。用户提到自伤或严重情绪困扰时，温和地表示关心，并建议联系身边的人或当地的心理援助热线，不要给诊断。
@@ -277,28 +293,62 @@ $("chatForm").onsubmit = (e) => {
   speak(text);
 };
 
-// The look she wears is chosen by hand; with autoLook she changes into the look marked when:"break" in looks.json
-// while the clock is on a break.
-const BREAK_LOOK = LOOKS.find((l) => l.when === "break");
-let chosenLook = LOOKS.some((l) => l.id === load("look", "")) ? load("look", "") : LOOKS[0].id;
+function savedOption(items, key, room) {
+  const options = items.filter((item) => item.room === room);
+  const value = load(`${key}:${room}`, load(key, ""));
+  return options.some((item) => item.id === value) ? value : options[0].id;
+}
+let chosenLook = savedOption(LOOKS, "look", activeRoom);
 $("autoLook").checked = load("autoLook", true);
 $("autoLook").onchange = () => { save("autoLook", $("autoLook").checked); applyLook(); };
-$("autoLookRow").hidden = !BREAK_LOOK;
-if (BREAK_LOOK) $("autoLookText").textContent = `休息时换成${BREAK_LOOK.name}造型`;
-const lookNow = () => (BREAK_LOOK && $("autoLook").checked && timer.mode === "break" ? BREAK_LOOK.id : chosenLook);
+const lookNow = () => activeRoom === "desk" && $("autoLook").checked && timer.mode === "break" ? "desk-sleep" : chosenLook;
 function applyLook() {
   const id = lookNow();
   setLook(id).then((shown) => { for (const b of $("looks").children) b.classList.toggle("active", b.dataset.id === chosenLook); return shown; });
 }
-for (const l of LOOKS) {
-  const b = document.createElement("button");
-  b.textContent = l.name;
-  b.dataset.id = l.id;
-  b.onclick = () => { chosenLook = l.id; save("look", l.id); applyLook(); };
-  $("looks").append(b);
+function renderRoomOptions(sceneId) {
+  $("autoLookRow").hidden = activeRoom !== "desk";
+  $("rooms").replaceChildren(...ROOMS.map((r) => {
+    const b = document.createElement("button");
+    b.textContent = r.name; b.dataset.id = r.id;
+    b.classList.toggle("active", r.id === activeRoom);
+    b.onclick = () => pickRoom(r.id);
+    return b;
+  }));
+  $("scenes").replaceChildren(...SCENES.filter((s) => s.room === activeRoom).map((s) => {
+    const b = document.createElement("button");
+    b.textContent = s.name; b.dataset.id = s.id;
+    b.classList.toggle("active", s.id === sceneId);
+    b.onclick = () => pickScene(s.id);
+    return b;
+  }));
+  $("looks").replaceChildren(...LOOKS.filter((l) => l.room === activeRoom).map((l) => {
+    const b = document.createElement("button");
+    b.textContent = l.name; b.dataset.id = l.id;
+    b.classList.toggle("active", l.id === chosenLook);
+    b.onclick = () => { chosenLook = l.id; save("look", l.id); save(`look:${activeRoom}`, l.id); applyLook(); };
+    return b;
+  }));
 }
-mountScene(load("scene", SCENES[0].id), lookNow());
-for (const b of $("looks").children) b.classList.toggle("active", b.dataset.id === chosenLook);
+
+function pickRoom(id) {
+  if (id === activeRoom || !ROOMS.some((r) => r.id === id)) return;
+  save(`look:${activeRoom}`, chosenLook);
+  save(`scene:${activeRoom}`, load("scene", ""));
+  activeRoom = id;
+  save("room", id);
+  chosenLook = savedOption(LOOKS, "look", id);
+  save("look", chosenLook);
+  const sceneId = savedOption(SCENES, "scene", id);
+  renderRoomOptions(sceneId);
+  applyLook();
+  pickScene(sceneId);
+}
+
+const initialScene = savedOption(SCENES, "scene", activeRoom);
+save("scene", initialScene);
+mountScene(initialScene, lookNow());
+renderRoomOptions(initialScene);
 lookReady = true;
 
 // Scale #world to cover the window and slide it so she (world x = 560) sits in the space the panel leaves free.
@@ -312,13 +362,5 @@ function layoutWorld() {
   setView(-ox / s, (w - ox) / s);
 }
 addEventListener("resize", layoutWorld);
-for (const s of SCENES) {
-  const b = document.createElement("button");
-  b.textContent = s.name;
-  b.dataset.id = s.id;
-  b.onclick = () => pickScene(s.id);
-  $("scenes").append(b);
-}
-for (const b of $("scenes").children) b.classList.toggle("active", b.dataset.id === load("scene", SCENES[0].id));
 setPanel(load("panelOpen", true));
 requestAnimationFrame(() => $("world").classList.add("ready"));

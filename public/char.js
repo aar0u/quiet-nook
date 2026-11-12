@@ -1,31 +1,21 @@
-// The room is one WebGL canvas in a fixed 1672x941 "world" (app.js scales it to the window).
-// Two layers, back to front (nothing is drawn over her: the laptop sits clear of where she rests her arms, so a
-// new look or pose needs no per-scene foreground work):
-//   plate  - the empty room, one per scene (scene/<id>/plate.webp)
-//   her    - a transparent cut-out of her, one per expression, shared by every scene (char/<face>.webp). The
-//            shader lights it per scene, casts her shadow onto the plate, and displaces it a few pixels
-//            (breathing, hair sway, head lean)
-// The fx canvas (rain, snow, dust, lamp glow, steam, the desk clock, the speech bubble) sits above.
 export const EXPRESSIONS = ["neutral", "happy", "shy", "sleepy", "think", "cheer"];
+export const ROOMS = [{ id: "floor", name: "地毯" }, { id: "desk", name: "书桌" }];
 const PANES = [[773, 0, 127, 480], [947, 0, 320, 493]];
-// look: how the neutral-lit cut-out is graded to fit the room. tint multiplies her colour, shadow is the offset
-// (world px) of her shadow on the room.
 export const SCENES = [
-  { id: "rain", name: "雨夜", fx: "rain", glass: PANES, lamp: { pos: [225, 455], rgb: [1.0, 0.72, 0.4], k: 0.16 }, look: { tint: [0.9, 0.9, 0.97], shadow: [10, 12] } },
-  { id: "day", name: "午后", fx: "dust", dust: "255,240,200", look: { tint: [1.0, 0.98, 0.94], shadow: [-10, 12] } },
-  { id: "dusk", name: "黄昏", fx: "dust", dust: "255,205,150", lamp: { pos: [225, 455], rgb: [1.0, 0.66, 0.3], k: 0.14 }, look: { tint: [1.0, 0.86, 0.74], shadow: [-8, 12] } },
-  { id: "snow", name: "雪夜", fx: "snow", glass: PANES, lamp: { pos: [225, 450], rgb: [1.0, 0.74, 0.44], k: 0.15 }, look: { tint: [0.92, 0.92, 0.98], shadow: [10, 12] } },
+  { id: "day4", room: "floor", name: "午后", src: "art/afternoon.png", look: { tint: [1.0, 0.98, 0.94], shadow: [-10, 12] }, clock: [161, 825, 23, 85, 780, 230, 870] },
+  { id: "day", room: "desk", name: "午后", fx: "dust", dust: "255,240,200", look: { tint: [1.0, 0.98, 0.94], shadow: [-10, 12] } },
+  { id: "dusk", room: "desk", name: "黄昏", fx: "dust", dust: "255,205,150", lamp: { pos: [225, 455], rgb: [1.0, 0.66, 0.3], k: 0.14 }, look: { tint: [1.0, 0.86, 0.74], shadow: [-8, 12] } },
+  { id: "rain", room: "desk", name: "雨夜", fx: "rain", glass: PANES, lamp: { pos: [225, 455], rgb: [1.0, 0.72, 0.4], k: 0.16 }, look: { tint: [0.9, 0.9, 0.97], shadow: [10, 12] } },
+  { id: "snow", room: "desk", name: "雪夜", fx: "snow", glass: PANES, lamp: { pos: [225, 450], rgb: [1.0, 0.74, 0.44], k: 0.15 }, look: { tint: [0.92, 0.92, 0.98], shadow: [10, 12] } },
 ];
-const FRAMES = [...EXPRESSIONS, "blink"];
-// A look is clothes + hair + pose + a set of faces, one folder public/looks/<id>/: neutral.webp is the whole picture
-// and every other face is a small patch of the face laid over it (faces.json has the patch rectangles).
-// The list is public/looks/looks.json, written by tools/makelook.py: [{id, name, fit, when}]. fit = [scale, anchor x,
-// anchor y, shift x] places the pose in the room; when = "break" makes it the look she wears during a break.
-export const LOOKS = await fetch("looks/looks.json").then((r) => r.json());
-const MUG = [1300, 658];
+export const LOOKS = [
+  { id: "default", room: "floor", name: "托腮", src: "art/cheek.png", fit: [0.72, 600, 700, -120] },
+  { id: "wrist2", room: "floor", name: "轻搭", src: "art/rest.png", fit: [0.72, 600, 700, -120] },
+  { id: "desk-default", room: "desk", name: "居家", dir: "default", fit: [1, 0, 0, 0] },
+  { id: "desk-sleep", room: "desk", name: "睡前", dir: "sleep", fit: [0.88, 270, 784, -30], when: "break" },
+  { id: "desk-rose", room: "desk", name: "成熟", dir: "rose", fit: [1, 0, 0, 0] },
+];
 const FADE_MS = 250;
-// The desk clock sits at the left front of the desk, parallel to its front edge (which rises 3.7 degrees to the right).
-const CLOCK = { left: 56, bottom: 905, width: 175, tilt: -3.7, lcdW: 120, lcdH: 44 };
 const NO_LINE_START = "，。！？、；：）」』”…～,.!?;:)";
 const BUBBLE = { x: 24, y: 70, w: 340, pad: 20, line: 34, font: "23px system-ui, 'PingFang SC', 'Noto Sans CJK SC', sans-serif" };
 
@@ -33,17 +23,16 @@ const $ = (id) => document.getElementById(id);
 const rand = (a, b) => a + Math.random() * (b - a);
 const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-let scene = SCENES[0], expr = "neutral", loadToken = 0;
+let scene = SCENES[0], expr = "neutral", loadToken = 0, lookToken = 0;
 let gl, loc, ctx2d;
 let look = LOOKS[0], looks = {};  // looks[id] = her frames {face: {img, tex}}, loaded on first use
 let her = null;   // the current look's frames
 let room = null;  // the current scene's plate {plate, plateTex}
 let A = null, B = null, mixStart = 0, mixMs = FADE_MS, dirty = true;
 const mouse = { x: 0, y: 0, tx: 0, ty: 0 };
-let fx, fxc, parts = [], last = 0, blinkTimer;
-const clock = { time: "25:00", mode: "专注", running: false, ringUntil: 0, img: null, meta: null };
-const clockMeta = fetch("props/clock.json").then((r) => r.json());
-let clockToken = 0, onClick = () => {};
+let fx, fxc, last = 0, parts = [];
+const clock = { time: "25:00", mode: "专注", running: false, ringUntil: 0 };
+let onClick = () => {};
 const bubble = { text: "", lines: null, wrapW: 0, t0: 0 };
 const view = { x0: 0, x1: 1672 };
 
@@ -73,7 +62,7 @@ void main(){
   vec2 px = uv * vec2(1672., 941.);
   vec2 inv = 1. / vec2(1672., 941.);
   vec4 h0 = her(uv);
-  float rest = 1. - smoothstep(700., 780., px.y);                 // forearms on the desk stay put
+  float rest = 1. - smoothstep(700., 780., px.y);
   float body = smoothstep(380., 520., px.y) * (1. - smoothstep(620., 760., px.y));
   float head = 1. - smoothstep(380., 520., px.y);
   vec2 d = vec2(0., -sin(uT * 1.2) * (1.2 + 2.2 * body) * rest);  // breathing, strongest at the shoulders
@@ -141,34 +130,40 @@ async function decode(src) {
 
 async function loadLook(l) {
   if (looks[l.id]) return looks[l.id];
-  const dir = `looks/${l.id}`;
-  const [base, rects] = await Promise.all([decode(`${dir}/neutral.webp`), fetch(`${dir}/faces.json`).then((r) => r.json())]);
-  const names = Object.keys(rects);
-  const patches = await Promise.all(names.map((f) => decode(`${dir}/${f}.webp`)));
   const frame = (img) => ({ img, tex: gl ? upload(img, true) : null });
+  if (l.src) {
+    const img = await decode(l.src);
+    return (looks[l.id] = { neutral: frame(img) });
+  }
+  const dir = `looks/${l.dir}`;
+  const [base, rects] = await Promise.all([decode(`${dir}/neutral.webp`), fetch(`${dir}/faces.json`).then((r) => {
+    if (!r.ok) throw new Error(`Cannot load ${dir}/faces.json`);
+    return r.json();
+  })]);
+  const names = Object.keys(rects);
+  const patches = await Promise.all(names.map((name) => decode(`${dir}/${name}.webp`)));
   const set = { neutral: frame(base) };
-  // Every face is neutral with its patch drawn over it, so all pixels outside the patch are identical in every face.
-  names.forEach((f, i) => {
-    const c = document.createElement("canvas");
-    c.width = base.width; c.height = base.height;
-    const g = c.getContext("2d");
-    g.drawImage(base, 0, 0);
-    g.drawImage(patches[i], rects[f][0], rects[f][1]);
-    set[f] = frame(c);
+  names.forEach((name, i) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = base.width; canvas.height = base.height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(base, 0, 0);
+    ctx.drawImage(patches[i], rects[name][0], rects[name][1]);
+    set[name] = frame(canvas);
   });
   return (looks[l.id] = set);
 }
 
-// Switching look cross-fades from the frame on screen to the new look's current face.
 export async function setLook(id) {
+  const token = ++lookToken;
   const next = LOOKS.find((l) => l.id === id) || LOOKS[0];
   const set = await loadLook(next);
+  if (token !== lookToken) return look.id;
   if (next === look && her) return next.id;
   look = next;
   her = set;
-  if (B) A = B;
   B = her[expr] || her.neutral;
-  if (!A) A = B;
+  A = B;
   mixStart = performance.now();
   mixMs = 700;
   dirty = true;
@@ -176,18 +171,31 @@ export async function setLook(id) {
 }
 
 async function loadScene() {
-  const token = ++loadToken, id = scene.id;
-  const plate = await decode(`scene/${id}/plate.webp`);
+  const token = ++loadToken;
+  const selected = scene;
+  const [plate, clockImg, clockMeta] = await Promise.all([
+    decode(selected.src || `scene/${selected.id}/plate.webp`),
+    selected.room === "desk" ? decode(`props/clock_${selected.id}.webp`) : null,
+    selected.room === "desk" ? fetch("props/clock.json").then((r) => {
+      if (!r.ok) throw new Error("Cannot load clock metadata");
+      return r.json();
+    }) : null,
+  ]);
   if (token !== loadToken) return;  // a newer scene was picked while loading
   if (gl && room) gl.deleteTexture(room.plateTex);
-  room = { plate, plateTex: gl ? upload(plate, false) : null };
+  room = { id: selected.id, plate, plateTex: gl ? upload(plate, false) : null, clockImg, clockMeta: clockMeta?.[selected.id] };
   dirty = true;
 }
 
 function drawScene(now, t) {
   const mix = Math.min(1, (now - mixStart) / mixMs);
   if (mix >= 1) A = B;
-  if (!gl) { ctx2d.drawImage(room.plate, 0, 0); ctx2d.drawImage(B.img, 0, 0); return; }
+  if (!gl) {
+    ctx2d.drawImage(room.plate, 0, 0);
+    const [scale, x, y, shift] = look.fit;
+    ctx2d.drawImage(B.img, x * (1 - scale) + shift, y * (1 - scale), B.img.width * scale, B.img.height * scale);
+    return;
+  }
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, A.tex);
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, B.tex);
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, room.plateTex);
@@ -198,37 +206,35 @@ function drawScene(now, t) {
   gl.uniform4f(loc.uLamp, lamp ? lamp.pos[0] : 0, lamp ? lamp.pos[1] : 0, lamp ? lamp.k * flick : 0, 0);
   gl.uniform3f(loc.uLampRgb, ...(lamp ? lamp.rgb : [0, 0, 0]));
   gl.uniform1f(loc.uMix, mix);
-  gl.uniform1f(loc.uT, still ? 0 : t);
-  gl.uniform2f(loc.uMouse, still ? 0 : mouse.x, still ? 0 : mouse.y);
+  gl.uniform1f(loc.uT, still || scene.room === "floor" ? 0 : t);
+  gl.uniform2f(loc.uMouse, still || scene.room === "floor" ? 0 : mouse.x, still || scene.room === "floor" ? 0 : mouse.y);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
 
-// ---------------- fx (2D canvas, world pixels) ----------------
 function spawn(rects) {
-  const total = rects.reduce((s, r) => s + r[2] * r[3], 0);
-  let k = Math.random() * total, r = rects[0];
-  for (const c of rects) { k -= c[2] * c[3]; if (k <= 0) { r = c; break; } }
-  return [r[0] + rand(0, r[2]), r[1] + rand(0, r[3])];
+  const total = rects.reduce((sum, r) => sum + r[2] * r[3], 0);
+  let k = Math.random() * total, rect = rects[0];
+  for (const r of rects) { k -= r[2] * r[3]; if (k <= 0) { rect = r; break; } }
+  return [rect[0] + rand(0, rect[2]), rect[1] + rand(0, rect[3])];
 }
 
 function makeParts() {
   parts = [];
-  const g = scene.glass;
-  if (scene.fx === "rain") for (let i = 0; i < 80; i++) { const [x, y] = spawn(g); parts.push({ x, y, len: rand(14, 30), v: rand(650, 1100), a: rand(0.12, 0.3) }); }
-  if (scene.fx === "snow") for (let i = 0; i < 90; i++) { const [x, y] = spawn(g); parts.push({ x, y, r: rand(1, 2.7), v: rand(25, 70), ph: rand(0, 6.3), amp: rand(8, 22), a: rand(0.55, 0.95) }); }
-  if (scene.fx === "dust") for (let i = 0; i < 30; i++) parts.push({ x: rand(380, 1450), y: rand(180, 820), r: rand(1, 2.6), vx: rand(-6, 6), vy: rand(-12, -3), ph: rand(0, 6.3) });
-}
-
-function radial(x, y, r, rgb, a) {
-  const g = fx.createRadialGradient(x, y, 0, x, y, r);
-  g.addColorStop(0, `rgba(${rgb},${a})`);
-  g.addColorStop(1, `rgba(${rgb},0)`);
-  fx.fillStyle = g;
-  fx.fillRect(x - r, y - r, r * 2, r * 2);
+  if (scene.fx === "rain") for (let i = 0; i < 80; i++) {
+    const [x, y] = spawn(scene.glass);
+    parts.push({ x, y, len: rand(14, 30), v: rand(650, 1100), a: rand(0.12, 0.3) });
+  }
+  if (scene.fx === "snow") for (let i = 0; i < 90; i++) {
+    const [x, y] = spawn(scene.glass);
+    parts.push({ x, y, r: rand(1, 2.7), v: rand(25, 70), ph: rand(0, 6.3), amp: rand(8, 22), a: rand(0.55, 0.95) });
+  }
+  if (scene.fx === "dust") for (let i = 0; i < 30; i++) {
+    parts.push({ x: rand(380, 1450), y: rand(180, 820), r: rand(1, 2.6), vx: rand(-6, 6), vy: rand(-12, -3), ph: rand(0, 6.3) });
+  }
 }
 
 function drawFx(dt, t) {
-  fx.clearRect(0, 0, fxc.width, fxc.height);
+  if (scene.room !== "desk") return;
   if (scene.fx === "rain" || scene.fx === "snow") {
     const bottom = Math.max(...scene.glass.map((r) => r[1] + r[3]));
     fx.save();
@@ -241,17 +247,12 @@ function drawFx(dt, t) {
         if (p.y > bottom) [p.x, p.y] = spawn(scene.glass), p.y = -p.len;
         fx.strokeStyle = `rgba(190,210,255,${p.a})`;
         fx.lineWidth = 1.2;
-        fx.beginPath();
-        fx.moveTo(p.x, p.y);
-        fx.lineTo(p.x - p.len * 0.12, p.y + p.len);
-        fx.stroke();
+        fx.beginPath(); fx.moveTo(p.x, p.y); fx.lineTo(p.x - p.len * 0.12, p.y + p.len); fx.stroke();
       } else {
         p.x += Math.sin(t * 0.8 + p.ph) * p.amp * dt;
         if (p.y > bottom) [p.x, p.y] = spawn(scene.glass), p.y = -4;
         fx.fillStyle = `rgba(255,255,255,${p.a})`;
-        fx.beginPath();
-        fx.arc(p.x, p.y, p.r, 0, 6.283);
-        fx.fill();
+        fx.beginPath(); fx.arc(p.x, p.y, p.r, 0, 6.283); fx.fill();
       }
     }
     fx.restore();
@@ -260,66 +261,66 @@ function drawFx(dt, t) {
       p.x += p.vx * dt; p.y += p.vy * dt;
       if (p.y < 160) { p.y = 820; p.x = rand(380, 1450); }
       fx.fillStyle = `rgba(${scene.dust},${0.15 + 0.45 * (0.5 + 0.5 * Math.sin(t * 1.3 + p.ph))})`;
-      fx.beginPath();
-      fx.arc(p.x, p.y, p.r, 0, 6.283);
-      fx.fill();
+      fx.beginPath(); fx.arc(p.x, p.y, p.r, 0, 6.283); fx.fill();
     }
   }
   for (let i = 0; i < 5; i++) {
-    const age = ((t / 3.2) + i / 5) % 1;
-    radial(MUG[0] + Math.sin(age * 5 + i * 2) * 9, MUG[1] - age * 85, 7 + age * 17, "255,255,255", 0.13 * (1 - age) * Math.min(1, age * 8));
+    const age = (t / 3.2 + i / 5) % 1;
+    const x = 1300 + Math.sin(age * 5 + i * 2) * 9, y = 658 - age * 85, r = 7 + age * 17;
+    const alpha = 0.13 * (1 - age) * Math.min(1, age * 8);
+    const g = fx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(255,255,255,${alpha})`);
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    fx.fillStyle = g;
+    fx.fillRect(x - r, y - r, r * 2, r * 2);
   }
-}
-
-// ---------------- desk clock (drawn on the fx canvas) ----------------
-async function loadClock(id) {
-  const token = ++clockToken;
-  const img = new Image();
-  img.src = `props/clock_${id}.webp`;
-  const [meta] = await Promise.all([clockMeta, img.decode()]);
-  if (token !== clockToken) return;
-  Object.assign(clock, { img, meta: meta[id] });
-  dirty = true;
-}
-
-function softEllipse(rx, ry, rgb, a) {
-  fx.save();
-  fx.scale(1, ry / rx);
-  radial(0, 0, rx, rgb, a);
-  fx.restore();
 }
 
 function drawClock(t, now) {
+  if (scene.room === "desk") return drawDeskClock(t, now);
   const c = clock;
-  if (!c.img) return;
-  const w = CLOCK.width, h = w / c.meta.aspect;
-  const ring = now < c.ringUntil && !still;
   fx.save();
-  fx.translate(CLOCK.left + w / 2, CLOCK.bottom);
-  // The sprite's feet already slope a little; subtract that so the line through the feet follows the desk edge.
-  fx.rotate((CLOCK.tilt - c.meta.slope + (ring ? Math.sin(t * 50) * 2.5 : 0)) * Math.PI / 180);
-  softEllipse(w * 0.85, 18, "0,0,0", 0.28);   // wide soft shadow
+  fx.fillStyle = "#f4d5a2";
+  fx.textAlign = "center";
+  fx.textBaseline = "middle";
+  const [x, y, size] = scene.clock;
+  fx.transform(1, -0.13, 0, 0.9, x, y);
+  fx.font = `600 ${size}px ui-monospace, monospace`;
+  fx.fillText(c.time, 0, 0);
+  fx.restore();
+}
+
+function softEllipse(rx, ry, rgb, alpha) {
+  fx.save();
+  fx.scale(1, ry / rx);
+  const g = fx.createRadialGradient(0, 0, 0, 0, 0, rx);
+  g.addColorStop(0, `rgba(${rgb},${alpha})`);
+  g.addColorStop(1, `rgba(${rgb},0)`);
+  fx.fillStyle = g;
+  fx.fillRect(-rx, -rx, rx * 2, rx * 2);
+  fx.restore();
+}
+
+function drawDeskClock(t, now) {
+  if (!room.clockImg || !room.clockMeta) return;
+  const meta = room.clockMeta, w = 175, h = w / meta.aspect;
+  const ring = now < clock.ringUntil && !still;
+  fx.save();
+  fx.translate(56 + w / 2, 905);
+  fx.rotate((-3.7 - meta.slope + (ring ? Math.sin(t * 50) * 2.5 : 0)) * Math.PI / 180);
+  softEllipse(w * 0.85, 18, "0,0,0", 0.28);
   softEllipse(w * 0.5, 8, "0,0,0", 0.3);
-  for (const [fxn, fyn] of c.meta.feet) {     // a dark contact patch right under each foot
+  for (const [x, y] of meta.feet) {
     fx.save();
-    fx.translate(fxn * w - w / 2, fyn * h - h);
+    fx.translate(x * w - w / 2, y * h - h);
     softEllipse(w * 0.09, 4.5, "0,0,0", 0.85);
     fx.restore();
   }
-  if (c.running || ring) {                    // the lit display glows on the desk in front of it
-    fx.globalCompositeOperation = "lighter";
-    fx.translate(0, 8);
-    softEllipse(w * 0.8, 22, "255,160,70", 0.1);
-    fx.translate(0, -8);
-    fx.globalCompositeOperation = "source-over";
-  }
-  fx.drawImage(c.img, -w / 2, -h + 1, w, h);  // one pixel down so the feet overlap their shadows
-  // The LCD text is drawn in a flat box and mapped onto the glass with an affine transform from three of the
-  // four glass corners (props/clock.json); the fourth is within a pixel or two at this size.
-  const [tl, tr, , bl] = c.meta.quad.map(([x, y]) => [x * w - w / 2, y * h - h]);
-  const { lcdW: LW, lcdH: LH } = CLOCK;
-  fx.transform((tr[0] - tl[0]) / LW, (tr[1] - tl[1]) / LW, (bl[0] - tl[0]) / LH, (bl[1] - tl[1]) / LH, tl[0], tl[1]);
-  const lit = c.running || (ring && Math.floor(t * 5) % 2 === 0);
+  fx.drawImage(room.clockImg, -w / 2, -h + 1, w, h);
+  const [tl, tr, , bl] = meta.quad.map(([x, y]) => [x * w - w / 2, y * h - h]);
+  const lw = 120, lh = 44;
+  fx.transform((tr[0] - tl[0]) / lw, (tr[1] - tl[1]) / lw, (bl[0] - tl[0]) / lh, (bl[1] - tl[1]) / lh, tl[0], tl[1]);
+  const lit = clock.running || (ring && Math.floor(t * 5) % 2 === 0);
   fx.fillStyle = "#ffb561";
   fx.shadowColor = "rgba(255,154,60,0.7)";
   fx.shadowBlur = lit ? 6 : 0;
@@ -327,18 +328,22 @@ function drawClock(t, now) {
   fx.textBaseline = "middle";
   fx.globalAlpha = lit ? 0.8 : 0.45;
   fx.font = "9px ui-monospace, 'DejaVu Sans Mono', monospace";
-  fx.fillText(c.mode.split("").join(" "), LW / 2, 8);
+  fx.fillText(clock.mode.split("").join(" "), lw / 2, 8);
   fx.globalAlpha = lit ? 1 : 0.55;
   fx.font = "600 27px ui-monospace, 'DejaVu Sans Mono', monospace";
-  fx.fillText(c.time, LW / 2, 28);
+  fx.fillText(clock.time, lw / 2, 28);
   fx.restore();
 }
 
 function hitClock(x, y) {
-  const w = CLOCK.width, h = w / (clock.meta?.aspect || 1.7), a = CLOCK.tilt * Math.PI / 180;
-  const dx = x - (CLOCK.left + w / 2), dy = y - CLOCK.bottom;
-  const lx = dx * Math.cos(a) + dy * Math.sin(a), ly = -dx * Math.sin(a) + dy * Math.cos(a);
-  return Math.abs(lx) < w / 2 && ly > -h && ly < 4;
+  if (scene.room === "desk") {
+    const w = 175, h = w / (room?.clockMeta?.aspect || 1.7), a = -3.7 * Math.PI / 180;
+    const dx = x - (56 + w / 2), dy = y - 905;
+    const lx = dx * Math.cos(a) + dy * Math.sin(a), ly = -dx * Math.sin(a) + dy * Math.cos(a);
+    return Math.abs(lx) < w / 2 && ly > -h && ly < 4;
+  }
+  const [, , , left, top, right, bottom] = scene.clock;
+  return x >= left && x <= right && y >= top && y <= bottom;
 }
 
 function worldPoint(e) {
@@ -423,7 +428,6 @@ export function setScene(id) {
   scene = SCENES.find((s) => s.id === id) || SCENES[0];
   makeParts();
   loadScene();
-  loadClock(scene.id);
   return scene.id;
 }
 
@@ -432,17 +436,11 @@ export function setExpression(e) {
   setFrame(expr);
 }
 
-export function holdBlink(ms) {
-  setFrame("blink", 60);
-  setTimeout(() => setFrame(expr, FADE_MS), ms);
-}
-
-// She blinks only from the neutral face; the blink frame is neutral with closed eyes.
 function scheduleBlink() {
-  blinkTimer = setTimeout(() => {
-    if (expr === "neutral" && !document.hidden) {
+  setTimeout(() => {
+    if (look.room === "desk" && expr === "neutral" && !document.hidden) {
       setFrame("blink", 60);
-      setTimeout(() => expr === "neutral" && setFrame("neutral", 90), 140);
+      setTimeout(() => { if (look.room === "desk" && expr === "neutral") setFrame("neutral", 90); }, 140);
     }
     scheduleBlink();
   }, rand(2500, 6000));
@@ -450,7 +448,7 @@ function scheduleBlink() {
 
 function tick(now) {
   requestAnimationFrame(tick);
-  if (!her || !room || now - last < 8) return;  // a frame costs under 1 ms, so draw at the display rate (capped near 120 fps)
+  if (!her || !room || room.id !== scene.id || look.room !== scene.room || now - last < 8) return;
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
   if (still && !dirty) return;
@@ -460,6 +458,7 @@ function tick(now) {
   drawScene(now, now / 1000);
   if (perf.on && gl) gl.finish();  // wait for the GPU so the number below is its real cost; only while measuring
   const t1 = performance.now();
+  fx.clearRect(0, 0, fxc.width, fxc.height);
   drawFx(still ? 0 : dt, now / 1000);
   drawClock(now / 1000, now);
   drawBubble(now);
@@ -467,7 +466,7 @@ function tick(now) {
   dirty = false;
 }
 
-// Press P (or open the page with ?perf) to see what a frame costs on this machine.
+// Open the page with ?perf to see frame cost.
 const perf = { on: /[?&]perf\b/.test(location.search), gpu: 0, cpu: 0, frames: 0, t0: 0, fps: 0 };
 function drawPerf(now, gpu, cpu) {
   perf.gpu += (gpu - perf.gpu) * 0.05;

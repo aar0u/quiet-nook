@@ -23,16 +23,17 @@ body {
 
 /* Collapsed: the panel shrinks to its toggle button. It is the only DOM over the canvas scene. */
 #panel.collapsed { bottom: auto; width: auto; height: auto; padding: 6px; overflow: hidden; }
-#panel.collapsed > :not(#bar), #panel.collapsed #scenes { display: none; }
+#panel.collapsed > :not(#bar), #panel.collapsed #rooms { display: none; }
 @media (max-width: 760px) {
   #panel.collapsed { top: auto; left: auto; right: 8px; bottom: 8px; width: auto; height: auto; }
 }
 #bar { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
-#scenes, #looks { display: flex; gap: 6px; flex-wrap: wrap; }
-#scenes button, #looks button { padding: 2px 10px; }
-#scenes button.active, #looks button.active { background: #f4b6a040; border-color: var(--accent); }
+#rooms, #scenes, #looks { display: flex; gap: 6px; flex-wrap: wrap; }
+#rooms button, #scenes button, #looks button { padding: 2px 10px; }
+#rooms button.active, #scenes button.active, #looks button.active { background: #f4b6a040; border-color: var(--accent); }
 #lookbar { display: grid; gap: 6px; }
 #lookbar .check { display: flex; gap: 6px; align-items: center; color: var(--dim); font-size: 12px; }
+#lookbar .check[hidden] { display: none; }
 #hide { border: 0; background: none; color: var(--dim); padding: 2px 8px; }
 #sound .check { justify-content: flex-start; font-size: 12px; }
 #sound .check input { flex: none; }

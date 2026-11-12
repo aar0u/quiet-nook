@@ -1,6 +1,6 @@
 # quiet-nook
 
-A cozy desktop study companion. You work at a desk in a small anime-style room; your AI girlfriend sits across from you, breathes, blinks, and talks when you want her to. A pomodoro timer lives on the desk as an alarm clock.
+A cozy desktop study companion with two rooms: a floor-seated afternoon scene and the original desk room. A pomodoro timer appears as an alarm clock.
 
 ![quiet-nook](docs/hero.jpg)
 
@@ -8,10 +8,10 @@ A cozy desktop study companion. You work at a desk in a small anime-style room; 
 
 ## Features
 
-- Four scenes: rainy night, afternoon, dusk, snowy night. Each has its own light, ambient sound preset, and weather effects (rain streaks, snow, drifting dust, steam from the mug).
-- She is a separate layer: she breathes, her hair sways, her head leans toward your cursor, and she blinks. Six expressions fade into each other.
-- A pomodoro timer on the desk. Click the clock to start or pause. It rings and shakes when a phase ends. It is drawn on the canvas with contact shadows under each foot, and its display is mapped onto the glass in that scene's perspective.
-- Cute stickers on the laptop lid, baked into each room image with the lid's perspective and lighting.
+- The floor room has one afternoon scene and two static poses, 托腮 and 轻搭. Its character and room are separate images.
+- The desk room has afternoon, dusk, rainy night and snowy night scenes, plus the original 居家, 睡前 and 成熟 looks. The desk character breathes, blinks and changes expression.
+- A pomodoro timer appears on the floor or desk. Click the clock to start or pause. It beeps when a phase ends.
+- Stickers on the desk room's laptop lid, baked into each scene image with the lid's perspective and lighting.
 - The whole room, including the clock and her speech bubble, is canvas. The side panel is the only DOM element over it.
 - She can operate the clock: say "I'm going to focus for a while" and she starts it.
 - Chat with her. She sees the timer state and your to-do list, and stays quiet while you focus.
@@ -29,7 +29,7 @@ npm start                      # http://127.0.0.1:7777
 
 `./run.sh` starts the server and opens it as a standalone app window with Chromium or Chrome (`--app`).
 
-Controls: click the clock to start or pause, press `H` to hide the side panel, use the buttons at the top of the panel to change scene.
+Controls: use the room, scene and pose buttons at the top of the panel. Click the clock to start or pause. Keys `1`, `2` and `3` cycle expressions, scenes and poses respectively. The floor poses do not yet have expression assets.
 
 ## Chat backends
 
@@ -47,14 +47,13 @@ The server listens on `127.0.0.1` only. Set `HOST=0.0.0.0` only if you understan
 
 ```
 public/
+  art/                       the floor room and its two transparent character sprites
   scene/<scene>/plate.webp   the empty room, with the chair and the desk behind where she sits
-  looks/<look>/              one folder per look (clothes, hair, pose), shared by every scene: neutral.webp is
+  looks/<look>/              desk-room looks shared by its four scenes: neutral.webp is
                              the whole transparent cut-out of her, the other faces are small patches of just the
                              face (faces.json has their rectangles) that char.js lays over it
   props/                     one alarm clock sprite per scene, and clock.json (corners of its glass)
-  char.js                    WebGL: plate, then her (graded per scene, with a cast shadow, displaced a few
-                             pixels for breathing, hair sway and head lean); nothing is drawn over her; a 2D
-                             canvas on top for weather, the desk clock and the speech bubble
+  char.js                    WebGL: room plate and character; a 2D canvas draws weather, clocks and speech
   app.js                 timer, to-do list, sound, chat, side panel
 server.js, backends.js   static server and the chat proxy
 tools/                   scripts used to build the art, see below
@@ -64,7 +63,7 @@ She answers in a fixed format: an expression tag (`[neutral]`, `[happy]`, `[shy]
 
 ## Art pipeline
 
-The images were generated with an AI image model (`gpt-image-2`) and are not hand drawn. `tools/` has the scripts, written for the author's machine, so expect to edit paths:
+The images were generated with an AI image model (`gpt-image-2`) and are not hand drawn. The scripts in `tools/` describe the older desk-room pipeline and were written for the author's machine, so expect to edit paths:
 
 - `gen.py`: one image edit or generation through a local opencode service.
 - `build.py`: bakes the laptop stickers into each generated empty room and writes `public/scene/<scene>/plate.webp`. The laptop corners are measured by hand for each room. The stickers come from one generated sticker sheet.
