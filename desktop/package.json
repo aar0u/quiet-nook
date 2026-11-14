@@ -1,0 +1,15 @@
+{
+  "name": "quiet-nook-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Electron window for the quiet-nook desktop companion. Delete this folder to remove it.",
+  "license": "MIT",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^45.3.1"
+  }
+}

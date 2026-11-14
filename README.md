@@ -31,6 +31,17 @@ npm start                      # http://127.0.0.1:7777
 
 Controls: use the scene and pose buttons at the top of the panel. Click the clock to start or pause. Keys `1`, `2` and `3` cycle expressions, scenes and poses respectively; `C` opens or closes the side panel.
 
+### Desktop companion
+
+`/?companion` shows only her and a patch of carpet on a transparent page, with a one-line chat box (click her, or press Space; Esc closes it), drag, and a pose menu (right-click). The scene key `2` still works there; a desk scene fills the window with the whole room. The `desktop/` folder wraps it in a transparent, always-on-top Electron window on its own port 7790, with clicks passing through the transparent parts:
+
+```sh
+cd desktop && pnpm install     # once
+pnpm start
+```
+
+All Electron code and configuration is in `desktop/`; delete the folder to remove it. The companion window has no timer controls yet; the clock tags in chat (`[start]`, `[pause]`) still work.
+
 ## Chat backends
 
 The server keeps your key out of the browser. It picks a backend from the environment, or from `CP_BACKEND`.

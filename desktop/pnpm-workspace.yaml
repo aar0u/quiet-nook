@@ -1,0 +1,3 @@
+# Electron downloads its binary in an install script, which pnpm blocks unless it is allowed here.
+allowBuilds:
+  electron: true
