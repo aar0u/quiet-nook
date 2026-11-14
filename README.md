@@ -2,9 +2,7 @@
 
 A cozy desktop study companion with two rooms: a floor-seated afternoon scene and the original desk room. A pomodoro timer appears as an alarm clock.
 
-![quiet-nook](docs/hero.jpg)
-
-![Four scenes: rainy night, afternoon, dusk, snowy night](docs/scenes.jpg)
+![Four scenes: floor, afternoon, rainy night and snowy night](docs/scenes.jpg)
 
 ## Features
 
