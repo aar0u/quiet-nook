@@ -48,7 +48,7 @@ const FULL_FRAME_FITS = {
 };
 const FADE_MS = 250;
 const NO_LINE_START = "，。！？、；：）」』”…～,.!?;:)";
-const BUBBLE = { x: 24, y: 70, w: 340, pad: 20, line: 34, font: "23px system-ui, 'PingFang SC', 'Noto Sans CJK SC', sans-serif" };
+const BUBBLE = { w: 340, pad: 20, line: 34, font: "23px system-ui, 'PingFang SC', 'Noto Sans CJK SC', sans-serif" };
 
 const $ = (id) => document.getElementById(id);
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -65,7 +65,7 @@ let fx, fxc, last = 0, parts = [];
 const clock = { time: "25:00", mode: "专注", running: false, ringUntil: 0 };
 let onClick = () => {};
 const bubble = { text: "", lines: null, wrapW: 0, t0: 0 };
-const view = { x0: 0, x1: 1672 };
+const view = { x0: 0, x1: 1672, y0: 0, y1: 941 };
 
 // ---------------- scene (WebGL) ----------------
 const VS = `attribute vec2 p; varying vec2 uv;
@@ -163,11 +163,30 @@ async function decode(src) {
   return img;
 }
 
+export function headBounds(pixels, width, height) {
+  let top = height, bottom = -1;
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    if (pixels[(y * width + x) * 4 + 3] > 32) { top = Math.min(top, y); bottom = y; }
+  }
+  if (bottom < 0) return null;
+  const end = Math.min(height, top + Math.max(1, Math.ceil((bottom - top + 1) * 0.3)));
+  let left = width, right = -1;
+  for (let y = top; y < end; y++) for (let x = 0; x < width; x++) {
+    if (pixels[(y * width + x) * 4 + 3] > 32) { left = Math.min(left, x); right = Math.max(right, x); }
+  }
+  return { left: left / width, right: (right + 1) / width, top: top / height, bottom: end / height };
+}
+
 async function loadLook(l) {
   if (looks[l.id]) return looks[l.id];
   const frame = (img) => ({ img, tex: gl ? upload(img, true) : null });
   const img = await decode(l.src);
-  const set = { neutral: frame(img) };
+  const sample = document.createElement("canvas");
+  sample.width = 256; sample.height = Math.round(256 * img.height / img.width);
+  const sampleCtx = sample.getContext("2d", { willReadFrequently: true });
+  sampleCtx.drawImage(img, 0, 0, sample.width, sample.height);
+  const head = headBounds(sampleCtx.getImageData(0, 0, sample.width, sample.height).data, sample.width, sample.height);
+  const set = { neutral: frame(img), head };
   if (l.fullFaces) {
     const names = EXPRESSIONS.filter((name) => name !== "neutral");
     const variants = await Promise.all(names.map((name) => decode(`${l.faces}/${name}.webp`)));
@@ -411,8 +430,7 @@ export function onClockClick(cb) { onClick = cb; }
 
 // ---------------- speech bubble (also on the canvas, so the side panel is the only DOM) ----------------
 export function say(text) { bubble.text = text; bubble.lines = null; bubble.t0 = performance.now(); dirty = true; }
-// The part of the world (x range, world pixels) that is on screen; app.js sets it whenever the layout changes.
-export function setView(x0, x1) { view.x0 = x0; view.x1 = x1; dirty = true; }
+export function setView(x0, x1, y0 = 0, y1 = 941) { Object.assign(view, { x0, x1, y0, y1 }); dirty = true; }
 
 function wrap(text, width) {
   fx.font = BUBBLE.font;
@@ -428,41 +446,44 @@ function wrap(text, width) {
 function drawBubble(now) {
   if (!bubble.text) return;
   const { pad, line } = BUBBLE;
-  // Normally the bubble sits left of her head with its tail pointing at her. When the window is narrow and the
-  // room is cropped (view is the part of the world on screen), it moves to the top centre of what is visible.
   const vw = view.x1 - view.x0;
-  const roomy = view.x0 <= BUBBLE.x - 12 && vw >= 760;
-  const w = roomy ? BUBBLE.w : Math.min(BUBBLE.w, vw - 48);
-  const x = roomy ? BUBBLE.x : view.x0 + (vw - w) / 2;
-  const y = roomy ? BUBBLE.y : 24;
-  if (!bubble.lines || bubble.wrapW !== w) { bubble.wrapW = w; bubble.lines = wrap(bubble.text, w); }
+  fx.font = BUBBLE.font;
+  const w = Math.max(1, Math.min(BUBBLE.w, vw - 32, Math.max(160, fx.measureText(bubble.text).width + 2 * pad)));
+  if (!bubble.lines || bubble.wrapW !== w) {
+    bubble.wrapW = w;
+    bubble.lines = wrap(bubble.text, w);
+    fx.textBaseline = "alphabetic";
+    const metrics = bubble.lines.map((text) => fx.measureText(text));
+    bubble.ascent = Math.max(...metrics.map((m) => m.actualBoundingBoxAscent));
+    bubble.descent = Math.max(...metrics.map((m) => m.actualBoundingBoxDescent));
+  }
   const h = bubble.lines.length * line + pad * 1.4;
+  const [scale, anchorX, anchorY, shift] = look.fit;
+  const img = her.neutral.img, bounds = her.head;
+  const left = bounds ? anchorX * (1 - scale) + shift + bounds.left * img.width * scale : (view.x0 + view.x1) / 2;
+  const right = bounds ? anchorX * (1 - scale) + shift + bounds.right * img.width * scale : left;
+  const top = bounds ? anchorY * (1 - scale) + bounds.top * img.height * scale : view.y0;
+  const gap = 18, minX = view.x0 + 16, maxX = Math.max(minX, view.x1 - w - 16);
+  const leftFits = left - w - gap >= minX, rightFits = right + gap <= maxX;
+  const x = leftFits ? left - w - gap : rightFits ? right + gap : Math.max(minX, Math.min(maxX, (left + right - w) / 2));
+  const preferredY = leftFits || rightFits ? top : top - h - gap;
+  const y = Math.max(view.y0 + 16, Math.min(preferredY, Math.max(view.y0 + 16, view.y1 - h - 16)));
   fx.save();
   fx.globalAlpha = Math.min(1, (now - bubble.t0) / 200);
-  // Body and tail are one path. The outline is stroked first and the opaque fill then covers the inner half of
-  // the stroke, so no line is left across the joint between the body and the tail.
+  fx.shadowColor = "rgba(62, 39, 24, 0.2)";
+  fx.shadowBlur = 14;
+  fx.shadowOffsetY = 3;
   fx.beginPath();
-  fx.roundRect(x, y, w, h, 20);
-  if (roomy) {                               // tail towards her head
-    fx.moveTo(x + w - 4, y + h * 0.55);
-    fx.lineTo(x + w + 30, y + h * 0.55 + 24);
-    fx.lineTo(x + w - 4, y + h * 0.55 + 22);
-  } else {                                   // tail pointing down at her
-    fx.moveTo(x + w / 2 - 14, y + h - 4);
-    fx.lineTo(x + w / 2, y + h + 22);
-    fx.lineTo(x + w / 2 + 14, y + h - 4);
-  }
-  fx.closePath();
-  fx.strokeStyle = "rgba(255,255,255,0.28)";
-  fx.lineWidth = 4;
-  fx.lineJoin = "round";
-  fx.stroke();
-  fx.fillStyle = "#1e1b34";
+  fx.roundRect(x, y, w, h, 16);
+  fx.fillStyle = "rgba(255, 248, 232, 0.94)";
   fx.fill();
-  fx.fillStyle = "#f1ecfa";
+  fx.shadowColor = "transparent";
+  fx.fillStyle = "#49382f";
   fx.font = BUBBLE.font;
-  fx.textBaseline = "top";
-  bubble.lines.forEach((l, i) => fx.fillText(l, x + pad, y + pad * 0.7 + i * line));
+  fx.textBaseline = "alphabetic";
+  const { ascent, descent } = bubble;
+  const baseline = y + (h - ((bubble.lines.length - 1) * line + ascent + descent)) / 2 + ascent;
+  bubble.lines.forEach((text, i) => fx.fillText(text, x + pad, baseline + i * line));
   fx.restore();
 }
 

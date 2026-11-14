@@ -5,8 +5,15 @@ import test from "node:test";
 
 globalThis.matchMedia = () => ({ matches: false });
 globalThis.location = { search: "" };
-const { ROOMS, SCENES, LOOKS, EXPRESSIONS } = await import("./public/char.js");
+const { ROOMS, SCENES, LOOKS, EXPRESSIONS, headBounds } = await import("./public/char.js");
 const publicDir = path.resolve("public");
+
+test("head bounds use the upper part of the visible silhouette", () => {
+  const width = 10, height = 10, pixels = new Uint8ClampedArray(width * height * 4);
+  for (let y = 2; y <= 8; y++) for (let x = y < 5 ? 3 : 1; x <= (y < 5 ? 6 : 8); x++) pixels[(y * width + x) * 4 + 3] = 255;
+  assert.deepEqual(headBounds(pixels, width, height), { left: 0.3, right: 0.7, top: 0.2, bottom: 0.5 });
+  assert.equal(headBounds(new Uint8ClampedArray(4), 1, 1), null);
+});
 
 test("each room exposes its own scenes, looks, and assets", async () => {
   assert.deepEqual(ROOMS.map((room) => room.id), ["floor", "desk"]);
