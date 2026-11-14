@@ -1,4 +1,5 @@
 import { mountScene, setScene, setLook, LOOKS, ROOMS, setExpression as showExpression, setClock, ringClock, onClockClick, say, setView, EXPRESSIONS, SCENES } from "./char.js";
+import { bubblePages, bubbleDuration } from "./bubble-text.js";
 
 const $ = (id) => document.getElementById(id);
 const APP_TITLE = "Quiet Nook";
@@ -56,7 +57,7 @@ function onPhaseEnd() {
   ring();
   try { new Notification(APP_TITLE, { body: finished === "focus" ? "专注结束，休息一下" : "休息结束" }); } catch { /* no permission */ }
   speak(finished === "focus"
-    ? "[系统事件] 一个专注时段刚结束，进入休息。请简短问候并问一句刚才做得怎么样。"
+    ? "[系统事件] 一个专注时段刚结束，进入休息。请自然简短地提醒用户休息。"
     : "[系统事件] 休息结束，新的专注时段即将开始。请简短鼓励一句。", true);
 }
 
@@ -178,10 +179,12 @@ const SYSTEM = `你是「阿宁」，是用户的女朋友，在房间里陪用�
 性格：温柔、体贴、有点害羞，偶尔小小地撒娇或调侃，不说教，不啰嗦。
 称呼：直接说"你"，不要猜测或使用用户的性别和昵称，除非用户自己说过。
 规则：
-- 每次回复 1 到 3 句中文，口语化，除非用户明确要求详细。
+- 用自然的中文口语回复，长度随内容变化：简单回应可以一句，需要展开时可以说一小段，通常不超过 80 字；用户要求详细时不受此限。
 - 回复第一个词必须是情绪标签，从 [neutral] [happy] [shy] [sleepy] [think] [cheer] 里选一个，之后接正文。大多数时候用 [neutral]，只有情绪明显时才用别的，不要总是 [happy]；被夸、被撒娇或有点不好意思时用 [shy]。
 - 闹钟由你操作。用户说要开始专注、学习、工作时，在回复末尾加 [start]；说要休息时加 [break]；说要暂停加 [pause]；说要重来加 [reset]。只在用户明确表达时才加，不要自己决定，也不要重复加。标签放在情绪标签之后、正文末尾，不要解释它。
 - 关心用户的状态。
+- 先回应用户实际说的内容，分享具体想法或感受，不要为了延续对话而每次提问，也不要习惯性地总结话题或提供 A/B 选项。
+- 留意最近对话，避免反复使用相同的问候、措辞或提问，例如反复询问是否想慢慢待着。亲近自然，不要套用固定的安慰或撒娇句式。
 - 你不是医生或心理咨询师。用户提到自伤或严重情绪困扰时，温和地表示关心，并建议联系身边的人或当地的心理援助热线，不要给诊断。
 - 不要编造你看不到的信息。你只知道下面的"当前状态"。`;
 
@@ -214,9 +217,16 @@ for (const m of history) if (m.display !== undefined) addMsg(m.role === "user" ?
 
 let bubbleTimer;
 function showBubble(text) {
-  say(text);
   clearTimeout(bubbleTimer);
-  bubbleTimer = setTimeout(() => { say(""); setExpression("neutral"); }, 10000);
+  const pages = bubblePages(text);
+  let index = 0;
+  function showNext() {
+    if (index === pages.length) { say(""); setExpression("neutral"); return; }
+    const page = pages[index++];
+    say(page);
+    bubbleTimer = setTimeout(showNext, bubbleDuration(page));
+  }
+  showNext();
 }
 
 async function speak(text, silentUser = false) {
