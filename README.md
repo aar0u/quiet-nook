@@ -8,13 +8,13 @@ A cozy desktop study companion with two rooms: a floor-seated afternoon scene an
 
 ## Features
 
-- The floor room has one afternoon scene and two static poses, 托腮 and 轻搭. Its character and room are separate images.
+- The floor room has one afternoon scene and two poses, 托腮 and 轻搭. Its character blinks and changes expression, and the room is a separate image.
 - The desk room has afternoon, dusk, rainy night and snowy night scenes, plus the 居家, 外出 and 睡前 looks. The desk character breathes, blinks and changes expression.
 - A pomodoro timer appears on the floor or desk. Click the clock to start or pause. It beeps when a phase ends.
 - Stickers on the desk room's laptop lid, baked into each scene image with the lid's perspective and lighting.
 - The whole room, including the clock and her speech bubble, is canvas. The side panel is the only DOM element over it.
 - She can operate the clock: say "I'm going to focus for a while" and she starts it.
-- Chat with her. She sees the timer state and your to-do list.
+- Chat with her. She sees the timer state.
 - Synthesized rain and brown noise, no audio files.
 - Everything is stored in the browser (`localStorage`). There is no account and no server-side state.
 
@@ -29,7 +29,7 @@ npm start                      # http://127.0.0.1:7777
 
 `./run.sh` starts the server and opens it as a standalone app window with Chromium or Chrome (`--app`).
 
-Controls: use the room, scene and pose buttons at the top of the panel. Click the clock to start or pause. Keys `1`, `2` and `3` cycle expressions, scenes and poses respectively; `C` opens or closes the side panel. The floor poses do not yet have expression assets.
+Controls: use the scene and pose buttons at the top of the panel. Click the clock to start or pause. Keys `1`, `2` and `3` cycle expressions, scenes and poses respectively; `C` opens or closes the side panel.
 
 ## Chat backends
 
@@ -47,13 +47,12 @@ The server listens on `127.0.0.1` only. Set `HOST=0.0.0.0` only if you understan
 
 ```
 public/
-  art/                       the floor room and its two transparent character sprites
-  scene/<scene>/plate.webp   the empty desk room, including its desk
-  looks/<look>/              full transparent sprites for neutral and emotion expressions;
-                             blink.webp is an eye patch applied to the neutral sprite
+  scene/<scene>/plate.webp   the empty room background
+  looks/<look>/              transparent character sprites with emotion expressions
+                             and blink.webp as an eye patch applied to the neutral sprite
   props/clock.png            the shared, independently rendered desk clock sprite
   char.js                    WebGL: room plate and character; a 2D canvas draws weather, clocks and speech
-  app.js                 timer, to-do list, sound, chat, side panel
+  app.js                 timer, sound, chat, side panel
 server.js, backends.js   static server and the chat proxy
 ```
 

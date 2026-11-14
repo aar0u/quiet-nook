@@ -2,26 +2,29 @@ export const EXPRESSIONS = ["neutral", "happy", "shy", "sleepy", "think", "cheer
 export const ROOMS = [{ id: "floor", name: "地毯" }, { id: "desk", name: "书桌" }];
 const PANES = [[964, 165, 266, 365], [1267, 145, 270, 385]];
 export const SCENES = [
-  { id: "day4", room: "floor", name: "午后", src: "art/afternoon.png", look: { tint: [1.0, 0.98, 0.94], shadow: [-10, 12] }, clock: [161, 825, 23, 85, 780, 230, 870] },
+  { id: "floor-afternoon", room: "floor", name: "地毯", look: { tint: [1.0, 0.98, 0.94], shadow: [-10, 12] } },
   { id: "day", room: "desk", name: "午后", noSteam: true, fx: "dust", dust: "255,240,200", look: { tint: [1.0, 0.98, 0.94], shadow: [-10, 12] } },
   { id: "dusk", room: "desk", name: "黄昏", fx: "dust", dust: "255,205,150", lamp: { pos: [150, 560], rgb: [1.0, 0.66, 0.3], k: 0.14 }, look: { tint: [1.0, 0.86, 0.74], shadow: [-8, 12] } },
   { id: "rain", room: "desk", name: "雨夜", fx: "rain", glass: PANES, lamp: { pos: [150, 560], rgb: [1.0, 0.72, 0.4], k: 0.16 }, look: { tint: [0.9, 0.9, 0.97], shadow: [10, 12] } },
   { id: "snow", room: "desk", name: "雪夜", fx: "snow", glass: PANES, lamp: { pos: [150, 560], rgb: [1.0, 0.74, 0.44], k: 0.15 }, look: { tint: [0.92, 0.92, 0.98], shadow: [10, 12] } },
 ];
 const CLOCK_LIGHTS = {
+  "floor-afternoon": { shade: 0, rgb: [255, 210, 155], glow: 0.04 },
   day: { shade: 0, rgb: [255, 210, 155], glow: 0.04 },
   dusk: { shade: 0.08, rgb: [255, 150, 75], glow: 0.16 },
   rain: { shade: 0.14, rgb: [255, 165, 100], glow: 0.14 },
   snow: { shade: 0.12, rgb: [255, 185, 125], glow: 0.12 },
 };
 export const LOOKS = [
-  { id: "default", room: "floor", name: "托腮", src: "art/cheek.webp", fit: [0.72, 600, 700, -120] },
-  { id: "wrist2", room: "floor", name: "轻搭", src: "art/rest.webp", fit: [0.72, 600, 700, -120] },
+  { id: "floor-cheek", room: "floor", name: "托腮", src: "looks/floor-cheek/neutral.webp", faces: "looks/floor-cheek", fullFaces: true, fit: [0.72, 600, 700, -120] },
+  { id: "floor-rest", room: "floor", name: "轻搭", src: "looks/floor-rest/neutral.webp", faces: "looks/floor-rest", fullFaces: true, fit: [0.72, 600, 700, -120] },
   { id: "desk-default", room: "desk", name: "居家", src: "looks/default/neutral.webp", faces: "looks/default", fullFaces: true, fit: [0.82, 0, 520, 52] },
   { id: "desk-rose", room: "desk", name: "外出", src: "looks/rose/neutral.webp", faces: "looks/rose", fullFaces: true, fit: [0.95, 0, 120, 158] },
   { id: "desk-sleep", room: "desk", name: "睡前", src: "looks/sleep/neutral.webp", faces: "looks/sleep", fullFaces: true, fit: [0.7, 0, 686, 191], when: "break" },
 ];
 const FACE_LAYOUTS = {
+  "looks/floor-cheek": { blinkOrigin: [590, 155], blinkRects: [[590, 175, 72, 60], [680, 155, 75, 65]] },
+  "looks/floor-rest": { blinkOrigin: [725, 155], blinkRects: [[725, 180, 70, 60], [810, 155, 75, 70]] },
   "looks/default": {
     blinkOrigin: [430, 220], blinkRects: [[430, 245, 105, 80], [548, 220, 105, 83]],
     blinkPolygons: [
@@ -249,8 +252,8 @@ async function loadScene() {
   const token = ++loadToken;
   const selected = scene;
   const [plate, clockImg] = await Promise.all([
-    decode(selected.src || `scene/${selected.id}/plate.webp`),
-    selected.room === "desk" ? decode("props/clock.png") : null,
+    decode(`scene/${selected.id}/plate.webp`),
+    decode("props/clock.png"),
   ]);
   if (token !== loadToken) return;  // a newer scene was picked while loading
   if (gl && room) gl.deleteTexture(room.plateTex);
@@ -347,20 +350,6 @@ function drawFx(dt, t) {
   }
 }
 
-function drawClock(t, now) {
-  if (scene.room === "desk") return drawDeskClock(t, now);
-  const c = clock;
-  fx.save();
-  fx.fillStyle = "#f4d5a2";
-  fx.textAlign = "center";
-  fx.textBaseline = "middle";
-  const [x, y, size] = scene.clock;
-  fx.transform(1, -0.13, 0, 0.9, x, y);
-  fx.font = `600 ${size}px ui-monospace, monospace`;
-  fx.fillText(c.time, 0, 0);
-  fx.restore();
-}
-
 function softEllipse(rx, ry, rgb, alpha) {
   fx.save();
   fx.scale(1, ry / rx);
@@ -372,14 +361,14 @@ function softEllipse(rx, ry, rgb, alpha) {
   fx.restore();
 }
 
-const DESK_CLOCK = { x: 56, y: 910, width: 175 };
+const CLOCK_POSITIONS = { desk: { x: 56, y: 910, width: 175 }, floor: { x: 85, y: 870, width: 145 } };
 
-function drawDeskClock(t, now) {
+function drawClock(t, now) {
   if (!room.clockImg) return;
-  const w = DESK_CLOCK.width, h = w * room.clockImg.height / room.clockImg.width;
+  const { x, y, width: w } = CLOCK_POSITIONS[scene.room], h = w * room.clockImg.height / room.clockImg.width;
   const ring = now < clock.ringUntil && !still;
   fx.save();
-  fx.translate(DESK_CLOCK.x + w / 2, DESK_CLOCK.y);
+  fx.translate(x + w / 2, y);
   fx.rotate(ring ? Math.sin(t * 50) * 2.5 * Math.PI / 180 : 0);
   softEllipse(w * 0.85, 18, "0,0,0", 0.28);
   softEllipse(w * 0.5, 8, "0,0,0", 0.3);
@@ -395,18 +384,15 @@ function drawDeskClock(t, now) {
   fx.textAlign = "center";
   fx.textBaseline = "middle";
   fx.globalAlpha = lit ? 1 : 0.55;
-  fx.font = "600 30px ui-monospace, 'DejaVu Sans Mono', monospace";
+  fx.font = `600 ${w * 30 / 175}px ui-monospace, 'DejaVu Sans Mono', monospace`;
   fx.fillText(clock.time, -w * 0.005, -h * 0.435 + 1);
   fx.restore();
 }
 
 function hitClock(x, y) {
-  if (scene.room === "desk") {
-    const w = DESK_CLOCK.width, h = w * (room?.clockImg ? room.clockImg.height / room.clockImg.width : 2 / 3);
-    return x >= DESK_CLOCK.x && x <= DESK_CLOCK.x + w && y > DESK_CLOCK.y - h && y < DESK_CLOCK.y + 4;
-  }
-  const [, , , left, top, right, bottom] = scene.clock;
-  return x >= left && x <= right && y >= top && y <= bottom;
+  const pos = CLOCK_POSITIONS[scene.room];
+  const h = pos.width * (room?.clockImg ? room.clockImg.height / room.clockImg.width : 2 / 3);
+  return x >= pos.x && x <= pos.x + pos.width && y > pos.y - h && y < pos.y + 4;
 }
 
 function worldPoint(e) {
@@ -501,10 +487,10 @@ export function setExpression(e) {
 
 function scheduleBlink() {
   setTimeout(() => {
-    if (look.room === "desk" && expr === "neutral" && !document.hidden) {
+    if (look.faces && look.room === scene.room && expr === "neutral" && !document.hidden) {
       const patched = Boolean(look.faces);
       setFrame("blink", patched ? 90 : 60);
-      setTimeout(() => { if (look.room === "desk" && expr === "neutral") setFrame("neutral", patched ? 130 : 90); }, patched ? 200 : 140);
+      setTimeout(() => { if (look.faces && look.room === scene.room && expr === "neutral") setFrame("neutral", patched ? 130 : 90); }, patched ? 200 : 140);
     }
     scheduleBlink();
   }, rand(2500, 6000));

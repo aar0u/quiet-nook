@@ -85,34 +85,6 @@ for (const id of ["focusMin", "breakMin"]) $(id).onchange = () => { save("mins",
 { const m = load("mins", null); if (m) { $("focusMin").value = m.focus; $("breakMin").value = m.break; } }
 setMode("focus");
 
-// ---------- todo ----------
-let todos = load("todos", []);
-function renderTodos() {
-  const ul = $("todoList");
-  ul.replaceChildren(...todos.map((t, i) => {
-    const li = document.createElement("li");
-    li.className = t.done ? "done" : "";
-    const span = document.createElement("span");
-    span.textContent = t.text;
-    span.onclick = () => { t.done = !t.done; save("todos", todos); renderTodos(); };
-    const del = document.createElement("button");
-    del.textContent = "×";
-    del.onclick = () => { todos.splice(i, 1); save("todos", todos); renderTodos(); };
-    li.append(span, del);
-    return li;
-  }));
-}
-$("todoForm").onsubmit = (e) => {
-  e.preventDefault();
-  const text = $("todoInput").value.trim();
-  if (!text) return;
-  todos.push({ text, done: false });
-  $("todoInput").value = "";
-  save("todos", todos);
-  renderTodos();
-};
-renderTodos();
-
 // ---------- ambient sound (synthesized, no asset files) ----------
 let ctx, gains = {};
 function noiseBuffer(brown) {
@@ -159,7 +131,7 @@ for (const name of SOUNDS) {
 }
 
 // ---------- scene, panel visibility ----------
-const SCENE_SOUND = { day4: { rain: 0, brown: 15 }, day: { rain: 0, brown: 15 }, dusk: { rain: 0, brown: 10 }, rain: { rain: 60, brown: 20 }, snow: { rain: 0, brown: 35 } };
+const SCENE_SOUND = { "floor-afternoon": { rain: 0, brown: 15 }, day: { rain: 0, brown: 15 }, dusk: { rain: 0, brown: 10 }, rain: { rain: 60, brown: 20 }, snow: { rain: 0, brown: 35 } };
 let activeRoom = ROOMS.some((r) => r.id === load("room", "floor")) ? load("room", "floor") : "floor";
 $("autoSound").checked = load("autoSound", true);
 $("autoSound").onchange = () => save("autoSound", $("autoSound").checked);
@@ -188,9 +160,8 @@ addEventListener("keydown", (e) => {
   if (e.key.toLowerCase() === "c") setPanel(!panelOpen());
   if (e.key === "1") setExpression(EXPRESSIONS[(EXPRESSIONS.indexOf(currentExpression) + 1) % EXPRESSIONS.length]);
   if (e.key === "2") {
-    const scenes = SCENES.filter((s) => s.room === activeRoom);
-    const index = scenes.findIndex((s) => s.id === load("scene", scenes[0].id));
-    pickScene(scenes[(index + 1) % scenes.length].id);
+    const index = SCENES.findIndex((s) => s.id === load("scene", SCENES[0].id));
+    selectScene(SCENES[(index + 1) % SCENES.length]);
   }
   if (e.key === "3") {
     const options = LOOKS.filter((l) => l.room === activeRoom);
@@ -225,9 +196,7 @@ function doAction(a) {
 
 function context() {
   const left = Math.round(timer.left / 60);
-  const open = todos.filter((t) => !t.done).map((t) => t.text);
-  return `\n\n当前状态：${timer.mode === "focus" ? "专注" : "休息"}${timer.running ? "中" : "（已暂停）"}，剩余约 ${left} 分钟。` +
-    `待办：${open.length ? open.join("；") : "无"}。`;
+  return `\n\n当前状态：${timer.mode === "focus" ? "专注" : "休息"}${timer.running ? "中" : "（已暂停）"}，剩余约 ${left} 分钟。`;
 }
 
 let history = load("history2", []);
@@ -309,18 +278,11 @@ function applyLook() {
 }
 function renderRoomOptions(sceneId) {
   $("autoLookRow").hidden = activeRoom !== "desk";
-  $("rooms").replaceChildren(...ROOMS.map((r) => {
-    const b = document.createElement("button");
-    b.textContent = r.name; b.dataset.id = r.id;
-    b.classList.toggle("active", r.id === activeRoom);
-    b.onclick = () => pickRoom(r.id);
-    return b;
-  }));
-  $("scenes").replaceChildren(...SCENES.filter((s) => s.room === activeRoom).map((s) => {
+  $("scenes").replaceChildren(...SCENES.map((s) => {
     const b = document.createElement("button");
     b.textContent = s.name; b.dataset.id = s.id;
     b.classList.toggle("active", s.id === sceneId);
-    b.onclick = () => pickScene(s.id);
+    b.onclick = () => selectScene(s);
     return b;
   }));
   $("looks").replaceChildren(...LOOKS.filter((l) => l.room === activeRoom).map((l) => {
@@ -332,7 +294,12 @@ function renderRoomOptions(sceneId) {
   }));
 }
 
-function pickRoom(id) {
+function selectScene(selected) {
+  if (selected.room === activeRoom) pickScene(selected.id);
+  else pickRoom(selected.room, selected.id);
+}
+
+function pickRoom(id, selectedScene) {
   if (id === activeRoom || !ROOMS.some((r) => r.id === id)) return;
   save(`look:${activeRoom}`, chosenLook);
   save(`scene:${activeRoom}`, load("scene", ""));
@@ -340,7 +307,7 @@ function pickRoom(id) {
   save("room", id);
   chosenLook = savedOption(LOOKS, "look", id);
   save("look", chosenLook);
-  const sceneId = savedOption(SCENES, "scene", id);
+  const sceneId = selectedScene || savedOption(SCENES, "scene", id);
   renderRoomOptions(sceneId);
   applyLook();
   pickScene(sceneId);
