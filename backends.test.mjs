@@ -9,8 +9,8 @@ const msgs = [
   { role: "assistant", content: "c" },
 ];
 
-test("normalize drops a leading assistant turn and merges same-role neighbours", () => {
-  assert.deepEqual(normalize(msgs), [{ role: "user", content: "a\nb" }, { role: "assistant", content: "c" }]);
+test("normalize retains a leading assistant turn and merges same-role neighbours", () => {
+  assert.deepEqual(normalize(msgs), [{ role: "user", content: "[Earlier user message is no longer available.]" }, { role: "assistant", content: "stale" }, { role: "user", content: "a\nb" }, { role: "assistant", content: "c" }]);
 });
 
 test("request bodies and reply extraction", () => {

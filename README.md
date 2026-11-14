@@ -9,10 +9,12 @@ A cozy desktop study companion with two rooms: a floor-seated afternoon scene an
 - The floor room has one afternoon scene and two poses, 托腮 and 轻搭. Its character blinks and changes expression, and the room is a separate image.
 - The desk room has afternoon, dusk, rainy night and snowy night scenes, plus the 居家, 外出 and 睡前 looks. The desk character breathes, blinks and changes expression.
 - A pomodoro timer appears on the floor or desk. Click the clock to start or pause. It beeps when a phase ends.
+- The timer uses wall-clock time, including while the computer sleeps. After an overdue timer is restored, it advances once and leaves the next phase paused.
 - Stickers on the desk room's laptop lid, baked into each scene image with the lid's perspective and lighting.
 - The whole room, including the clock and her speech bubble, is canvas. The side panel is the only DOM element over it.
 - She can operate the clock: say "I'm going to focus for a while" and she starts it.
 - Chat with her. She sees the timer state.
+- Chat requests are sent in order. The app retains up to 60 messages and sends the retained history with each request.
 - Synthesized rain and brown noise, no audio files.
 - Everything is stored in the browser (`localStorage`). There is no account and no server-side state.
 

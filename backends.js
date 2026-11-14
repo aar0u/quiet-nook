@@ -4,7 +4,7 @@
 export function normalize(messages) {
   const out = [];
   for (const m of messages) {
-    if (!out.length && m.role !== "user") continue;
+    if (!out.length && m.role !== "user") out.push({ role: "user", content: "[Earlier user message is no longer available.]" });
     const last = out[out.length - 1];
     if (last && last.role === m.role) last.content += "\n" + m.content;
     else out.push({ role: m.role, content: m.content });

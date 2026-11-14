@@ -1,5 +1,7 @@
 import { mountScene, setScene, setLook, LOOKS, ROOMS, setExpression as showExpression, setClock, ringClock, onClockClick, say, setView, EXPRESSIONS, SCENES } from "./char.js";
 import { bubblePages, bubbleDuration } from "./bubble-text.js";
+import { createChatQueue } from "./chat-queue.js";
+import { remainingSeconds, restoreTimer } from "./timer-state.js";
 
 const $ = (id) => document.getElementById(id);
 const APP_TITLE = "Quiet Nook";
@@ -15,6 +17,7 @@ const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } cat
 const timer = { mode: "focus", left: 25 * 60, running: false, tick: null, endAt: 0 };
 let lookReady = false;  // set once the scene is mounted; before that a mode change has no look to apply
 const minutes = () => ({ focus: +$("focusMin").value || 25, break: +$("breakMin").value || 5 });
+const saveTimer = () => save("timer", { mode: timer.mode, left: timer.left, running: timer.running, endAt: timer.endAt });
 
 function renderClock() {
   const s = Math.max(0, Math.round(timer.left));
@@ -27,7 +30,8 @@ function renderClock() {
 // The alarm clock on the desk rings when a phase ends: it shakes and beeps three times.
 function ring() {
   ringClock(2400);
-  startAudioIfNeeded();
+  try { startAudioIfNeeded(); } catch { return; }
+  if (!ctx) return;
   for (let i = 0; i < 3; i++) {
     const t = ctx.currentTime + i * 0.7;
     for (const [k, f] of [[0, 1760], [0.18, 1760]]) {
@@ -47,34 +51,49 @@ function setMode(mode) {
   timer.left = minutes()[mode] * 60;
   timer.running = false;
   clearInterval(timer.tick);
+  timer.endAt = 0;
+  saveTimer();
   renderClock();
   if (lookReady) applyLook();
 }
 
-function onPhaseEnd() {
-  const finished = timer.mode;
-  setMode(finished === "focus" ? "break" : "focus");
-  ring();
+function announcePhaseEnd(finished) {
   try { new Notification(APP_TITLE, { body: finished === "focus" ? "专注结束，休息一下" : "休息结束" }); } catch { /* no permission */ }
   speak(finished === "focus"
     ? "[系统事件] 一个专注时段刚结束，进入休息。请自然简短地提醒用户休息。"
     : "[系统事件] 休息结束，新的专注时段即将开始。请简短鼓励一句。", true);
 }
 
+function onPhaseEnd() {
+  const finished = timer.mode;
+  setMode(finished === "focus" ? "break" : "focus");
+  ring();
+  announcePhaseEnd(finished);
+}
+
+function updateTimer() {
+  if (!timer.running) return;
+  timer.left = remainingSeconds(timer);
+  if (timer.left <= 0) onPhaseEnd(); else renderClock();
+}
+
 function toggleTimer() {
   if (timer.running) {
+    timer.left = remainingSeconds(timer);
+    if (timer.left <= 0) return onPhaseEnd();
     timer.running = false;
     clearInterval(timer.tick);
+    timer.endAt = 0;
   } else {
     timer.running = true;
     timer.endAt = Date.now() + timer.left * 1000;
+    saveTimer();
+    timer.tick = setInterval(updateTimer, 250);
+    renderClock();
     if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
-    startAudioIfNeeded();
-    timer.tick = setInterval(() => {
-      timer.left = (timer.endAt - Date.now()) / 1000;
-      if (timer.left <= 0) onPhaseEnd(); else renderClock();
-    }, 250);
+    try { startAudioIfNeeded(); } catch { /* Timer must keep running without audio. */ }
   }
+  saveTimer();
   renderClock();
 }
 
@@ -84,7 +103,15 @@ $("skip").onclick = () => setMode(timer.mode === "focus" ? "break" : "focus");
 $("reset").onclick = () => setMode(timer.mode);
 for (const id of ["focusMin", "breakMin"]) $(id).onchange = () => { save("mins", minutes()); if (!timer.running) setMode(timer.mode); };
 { const m = load("mins", null); if (m) { $("focusMin").value = m.focus; $("breakMin").value = m.break; } }
-setMode("focus");
+const restoredTimer = restoreTimer(load("timer", null), minutes());
+if (restoredTimer) {
+  Object.assign(timer, restoredTimer);
+  if (timer.running) timer.tick = setInterval(updateTimer, 250);
+  saveTimer();
+  renderClock();
+} else setMode("focus");
+addEventListener("pageshow", updateTimer);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) updateTimer(); });
 
 // ---------- ambient sound (synthesized, no asset files) ----------
 let ctx, gains = {};
@@ -203,6 +230,11 @@ function context() {
 }
 
 let history = load("history2", []);
+if (!Array.isArray(history)) history = [];
+if (history.length > 60) {
+  history = history.slice(-60);
+  save("history2", history);
+}
 const log = $("log");
 const scrollLog = () => { log.scrollTop = log.scrollHeight; };
 function addMsg(cls, text) {
@@ -229,13 +261,14 @@ function showBubble(text) {
   showNext();
 }
 
-async function speak(text, silentUser = false) {
-  const el = silentUser ? null : addMsg("user", text);
-  history.push({ role: "user", content: text, display: silentUser ? undefined : text });
+async function sendMessage(text, silentUser = false, el = null) {
+  const message = { role: "user", content: text, display: silentUser ? undefined : text };
   const botEl = addMsg("bot", "…");
-  let full = "";
+  let full = "", displaced = [];
   try {
-    const messages = history.slice(-20).map(({ role, content }) => ({ role, content }));
+    if (history.length >= 60) displaced = history.splice(0, history.length - 59);
+    history.push(message);
+    const messages = history.map(({ role, content }) => ({ role, content }));
     const r = await fetch("/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -244,6 +277,7 @@ async function speak(text, silentUser = false) {
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
     full = data.text;
+    if (typeof full !== "string" || !full.trim()) throw new Error("empty reply from the model");
     const tag = full.match(/^\s*\[(\w+)\]/)?.[1];
     const ACTION = /\[(start|pause|break|reset)\]/g;
     const actions = [...full.matchAll(ACTION)].map((m) => m[1]);
@@ -258,12 +292,20 @@ async function speak(text, silentUser = false) {
     botEl.className = "msg err";
     botEl.textContent = `出错了：${e.message}`;
     scrollLog();
-    history.pop();
+    const index = history.indexOf(message);
+    if (index !== -1) history.splice(index, 1);
+    history.unshift(...displaced);
     if (silentUser === false && el) el.classList.add("err");
   }
-  history = history.slice(-60);
+  if (history.length > 60) history.splice(0, history.length - 60);
   save("history2", history);
 }
+const enqueueMessage = createChatQueue(sendMessage);
+function speak(text, silentUser = false) {
+  const el = silentUser ? null : addMsg("user", text);
+  return enqueueMessage(text, silentUser, el);
+}
+if (restoredTimer?.finished) announcePhaseEnd(restoredTimer.finished);
 
 $("chatForm").onsubmit = (e) => {
   e.preventDefault();
