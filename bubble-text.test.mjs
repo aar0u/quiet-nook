@@ -17,7 +17,7 @@ test("bubble pages drop paragraph breaks and edge whitespace", () => {
 });
 
 test("bubble reading time grows with length and stays bounded", () => {
-  assert.equal(bubbleDuration("短句"), 3500);
+  assert.equal(bubbleDuration("短句"), 3000);
   assert.ok(bubbleDuration("字".repeat(30)) > bubbleDuration("短句"));
-  assert.equal(bubbleDuration("字".repeat(100)), 12000);
+  assert.equal(bubbleDuration("字".repeat(100)), 10000);
 });

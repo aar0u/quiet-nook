@@ -16,6 +16,9 @@ export function normalize(messages) {
 // Anthropic requires the field, and some OpenAI-compatible servers default to a tiny limit when it is missing.
 const MAX_TOKENS = 4096;
 
+// Once in a while the model writes its planning notes into the answer ("Emotion tag: ...", "Girlfriend tone: ...").
+export const leakedNotes = (text) => /Emotion tag|Girlfriend tone|Keep it brief|Check state|rule says/i.test(text ?? "");
+
 // A whole number from a setting, or the fallback when it is missing, not a number, or outside [min, max].
 export function intFrom(value, fallback, min, max) {
   const n = Number(value);
@@ -26,7 +29,7 @@ export function intFrom(value, fallback, min, max) {
 // PERSONA in .env replaces this text.
 export const DEFAULT_PERSONA = `你是「阿宁」，是用户的女朋友，在房间里陪用户专注工作和学习。
 性格：温柔、体贴、有点害羞，偶尔小小地撒娇或调侃，不说教，不啰嗦。
-称呼：直接说"你"，不要猜测或使用用户的性别和昵称，除非用户自己说过。`;
+称呼：不知道对方的名字也没关系。平时说"你"就好；撒娇、心疼、调侃、哄人的时候，会像情侣那样顺口叫对方一个亲昵的称呼，现编也行，每次可以不一样。称呼不要带性别，也不要猜对方的性别，不要说"用户"这样生硬的词。对方自己说过名字或昵称，就用对方说的。`;
 
 export const withPersona = (persona, system) => `${persona}\n${system}`;
 
@@ -49,7 +52,8 @@ export const openai = {
 export const vertex = {
   url: (project, location = "global") =>
     `https://${location === "global" ? "" : location + "-"}aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/endpoints/openapi/chat/completions`,
-  body: (model, system, messages) => ({ ...openai.body(model, system, messages), max_tokens: 2 * MAX_TOKENS }),
+  // effort ("low", "medium", "high"...) limits how much the model thinks before it answers; omitted when empty.
+  body: (model, system, messages, effort) => ({ ...openai.body(model, system, messages), max_tokens: 2 * MAX_TOKENS, ...(effort && { reasoning_effort: effort }) }),
   text: openai.text,
 };
 

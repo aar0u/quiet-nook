@@ -21,5 +21,5 @@ export function bubblePages(text, limit = 42) {
 }
 
 export function bubbleDuration(text) {
-  return Math.max(3500, Math.min(12000, 1800 + Array.from(text).length * 180));
+  return Math.max(3000, Math.min(10000, 1500 + Array.from(text).length * 150));
 }

@@ -10,7 +10,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { anthropic, openai, vertex, serviceAccountAssertion, opencodePrompt, DEFAULT_PERSONA, withPersona, intFrom } from "./backends.js";
+import { anthropic, openai, vertex, serviceAccountAssertion, opencodePrompt, DEFAULT_PERSONA, withPersona, intFrom, leakedNotes } from "./backends.js";
 
 const PROJECT = path.dirname(fileURLToPath(import.meta.url));
 // Resolved from this file, not the working directory, so the Electron wrapper in desktop/ finds the same .env.
@@ -79,7 +79,7 @@ async function vertexAccessToken() {
 async function reply(system, messages) {
   if (BACKEND === "vertex") {
     const token = await vertexAccessToken();
-    const r = await post(vertex.url(vertexCreds.project_id, env.VERTEX_LOCATION || "global"), { authorization: `Bearer ${token}` }, vertex.body(MODEL, system, messages));
+    const r = await post(vertex.url(vertexCreds.project_id, env.VERTEX_LOCATION || "global"), { authorization: `Bearer ${token}` }, vertex.body(MODEL, system, messages, env.CP_REASONING_EFFORT));
     return vertex.text(r);
   }
   if (BACKEND === "anthropic") {
@@ -98,7 +98,11 @@ async function reply(system, messages) {
 async function chat(req, res) {
   const { system, messages } = JSON.parse(await readBody(req));
   let text, error;
-  try { text = await reply(withPersona(PERSONA, system), messages); } catch (e) {
+  try {
+    const full = withPersona(PERSONA, system);
+    text = await reply(full, messages);
+    if (leakedNotes(text)) text = await reply(full, messages);  // asking again almost always gives a clean answer
+  } catch (e) {
     error = e.name === "TimeoutError" ? `the model did not answer within ${TIMEOUT_MS / 1000}s` : String(e.message || e);
   }
   const ok = Boolean(text);

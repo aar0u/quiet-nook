@@ -3,7 +3,7 @@ import test from "node:test";
 import { createPublicKey, generateKeyPairSync, sign, verify } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { parseEnv } from "node:util";
-import { anthropic, openai, vertex, serviceAccountAssertion, normalize, opencodePrompt, DEFAULT_PERSONA, withPersona, intFrom } from "./backends.js";
+import { anthropic, openai, vertex, serviceAccountAssertion, normalize, opencodePrompt, DEFAULT_PERSONA, withPersona, intFrom, leakedNotes } from "./backends.js";
 
 const msgs = [
   { role: "assistant", content: "stale" },
@@ -31,6 +31,11 @@ test(".env.example parses, lists the three keys, and its persona is the built-in
   assert.equal(withPersona("persona", "rules"), "persona\nrules");
 });
 
+test("leaked planning notes are recognised, ordinary replies are not", () => {
+  assert.equal(leakedNotes("Acknowledge coffee intake.\n- Emotion tag: [neutral]\n下午确实容易靠它续命。"), true);
+  for (const ok of ["[neutral]辛苦了，先靠着歇会儿。", "我这边在改一本书的封面，Emotion 这个词我也不懂。", "", undefined]) assert.equal(leakedNotes(ok), false);
+});
+
 test("intFrom accepts whole numbers in range and falls back otherwise", () => {
   assert.equal(intFrom("120", 60, 2, 1000), 120);
   for (const bad of [undefined, "", "abc", "1.5", "1", "1001", "-5"]) assert.equal(intFrom(bad, 60, 2, 1000), 60, String(bad));
@@ -42,6 +47,8 @@ test("vertex url and body", () => {
   const body = vertex.body("google/gemini-3.8-flash", "sys", msgs);
   assert.equal(body.messages[0].role, "system");
   assert.ok(body.max_tokens >= 8192);
+  assert.equal("reasoning_effort" in body, false);
+  assert.equal(vertex.body("m", "sys", msgs, "low").reasoning_effort, "low");
   assert.ok(anthropic.body("m", "sys", msgs).max_tokens >= 4096 && openai.body("m", "sys", msgs).max_tokens >= 4096);
 });
 
