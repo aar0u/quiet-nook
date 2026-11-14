@@ -20,10 +20,10 @@ A cozy desktop study companion with two rooms: a floor-seated afternoon scene an
 
 ## Quick start
 
-Requires Node 20 or newer and a browser with WebGL.
+Requires Node 20.12 or newer and a browser with WebGL.
 
 ```sh
-export ANTHROPIC_API_KEY=...   # or see the backend table below
+cp .env.example .env           # then put a key in .env, see "Chat backends" below
 npm start                      # http://127.0.0.1:7777
 ```
 
@@ -44,7 +44,11 @@ All Electron code and configuration is in `desktop/`; delete the folder to remov
 
 ## Chat backends
 
-The server keeps your key out of the browser. It picks a backend from the environment, or from `CP_BACKEND`.
+The server keeps your key out of the browser. It reads its settings from a `.env` file in the project root (copy `.env.example`; `.env` is not committed) and from the environment, and a variable already set in the shell wins over the file. The desktop window in `desktop/` reads the same file. It picks a backend from the keys it finds, or from `CP_BACKEND`.
+
+`CP_HISTORY` sets how many messages are kept and sent as context (default 60, up to 1000) and `CP_TIMEOUT_MS` how long to wait for the model (default 60000).
+
+Her persona (who she is and how she talks) is the `PERSONA` setting in `.env`. Leave it out for the built-in text. The reply format and the clock rules are not part of it, because the page parses her answers; they are in `public/app.js`.
 
 | Backend | Selected when | Settings |
 |---|---|---|

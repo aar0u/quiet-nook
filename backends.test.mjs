@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createPublicKey, generateKeyPairSync, sign, verify } from "node:crypto";
-import { anthropic, openai, vertex, serviceAccountAssertion, normalize, opencodePrompt } from "./backends.js";
+import { readFileSync } from "node:fs";
+import { parseEnv } from "node:util";
+import { anthropic, openai, vertex, serviceAccountAssertion, normalize, opencodePrompt, DEFAULT_PERSONA, withPersona, intFrom } from "./backends.js";
 
 const msgs = [
   { role: "assistant", content: "stale" },
@@ -20,6 +22,18 @@ test("request bodies and reply extraction", () => {
   assert.equal(anthropic.text({ content: [{ text: "hi" }, { text: "!" }] }), "hi!");
   assert.equal(openai.text({ choices: [{ message: { content: "hi" } }] }), "hi");
   assert.match(opencodePrompt("sys", msgs), /用户：a\nb\n你：c\n你：$/);
+});
+
+test(".env.example parses, lists the three keys, and its persona is the built-in one", () => {
+  const env = parseEnv(readFileSync(new URL("./.env.example", import.meta.url), "utf8"));
+  for (const key of ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"]) assert.equal(env[key], "");
+  assert.equal(env.PERSONA, DEFAULT_PERSONA);
+  assert.equal(withPersona("persona", "rules"), "persona\nrules");
+});
+
+test("intFrom accepts whole numbers in range and falls back otherwise", () => {
+  assert.equal(intFrom("120", 60, 2, 1000), 120);
+  for (const bad of [undefined, "", "abc", "1.5", "1", "1001", "-5"]) assert.equal(intFrom(bad, 60, 2, 1000), 60, String(bad));
 });
 
 test("vertex url and body", () => {

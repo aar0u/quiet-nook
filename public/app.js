@@ -211,10 +211,8 @@ addEventListener("keydown", (e) => {
 });
 
 // ---------- character + chat ----------
-const SYSTEM = `你是「阿宁」，是用户的女朋友，在房间里陪用户专注工作和学习。
-性格：温柔、体贴、有点害羞，偶尔小小地撒娇或调侃，不说教，不啰嗦。
-称呼：直接说"你"，不要猜测或使用用户的性别和昵称，除非用户自己说过。
-规则：
+// The rules the page depends on (reply format, clock tags). Who she is comes from the server: PERSONA in .env.
+const SYSTEM = `规则：
 - 用自然的中文口语回复，长度随内容变化：简单回应可以一句，需要展开时可以说一小段，通常不超过 80 字；用户要求详细时不受此限。
 - 回复第一个词必须是情绪标签，从 [neutral] [happy] [shy] [sleepy] [think] [cheer] 里选一个，之后接正文。大多数时候用 [neutral]，只有情绪明显时才用别的，不要总是 [happy]；被夸、被撒娇或有点不好意思时用 [shy]。
 - 闹钟由你操作。用户说要开始专注、学习、工作时，在回复末尾加 [start]；说要休息时加 [break]；说要暂停加 [pause]；说要重来加 [reset]。只在用户明确表达时才加，不要自己决定，也不要重复加。标签放在情绪标签之后、正文末尾，不要解释它。
@@ -238,10 +236,12 @@ function context() {
   return `\n\n当前状态：${timer.mode === "focus" ? "专注" : "休息"}${timer.running ? "中" : "（已暂停）"}，剩余约 ${left} 分钟。`;
 }
 
+// How many messages are kept and sent as context comes from the server (CP_HISTORY in .env). Without an answer: 60.
+const HISTORY_LIMIT = await fetch("/api/config").then((r) => r.json()).then((c) => (Number.isInteger(c.history) && c.history >= 2 ? c.history : 60)).catch(() => 60);
 let history = load("history2", []);
 if (!Array.isArray(history)) history = [];
-if (history.length > 60) {
-  history = history.slice(-60);
+if (history.length > HISTORY_LIMIT) {
+  history = history.slice(-HISTORY_LIMIT);
   save("history2", history);
 }
 const log = $("log");
@@ -285,7 +285,7 @@ async function sendMessage(text, silentUser = false) {
   if (COMPANION) { clearTimeout(bubbleTimer); say("…"); }  // no chat log in the companion window: the bubble says she is thinking until the reply or the error replaces it
   let full = "", displaced = [];
   try {
-    if (history.length >= 60) displaced = history.splice(0, history.length - 59);
+    if (history.length >= HISTORY_LIMIT) displaced = history.splice(0, history.length - (HISTORY_LIMIT - 1));
     history.push(message);
     const messages = history.map(({ role, content }) => ({ role, content }));
     const r = await fetch("/api/chat", {
@@ -316,7 +316,7 @@ async function sendMessage(text, silentUser = false) {
     if (index !== -1) history.splice(index, 1);
     history.unshift(...displaced);
   }
-  if (history.length > 60) history.splice(0, history.length - 60);
+  if (history.length > HISTORY_LIMIT) history.splice(0, history.length - HISTORY_LIMIT);
   save("history2", history);
 }
 const enqueueMessage = createChatQueue(sendMessage);

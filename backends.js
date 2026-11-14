@@ -16,6 +16,20 @@ export function normalize(messages) {
 // Anthropic requires the field, and some OpenAI-compatible servers default to a tiny limit when it is missing.
 const MAX_TOKENS = 4096;
 
+// A whole number from a setting, or the fallback when it is missing, not a number, or outside [min, max].
+export function intFrom(value, fallback, min, max) {
+  const n = Number(value);
+  return value !== undefined && value !== "" && Number.isInteger(n) && n >= min && n <= max ? n : fallback;
+}
+
+// Who she is. The reply format and clock rules stay in public/app.js, because the page parses what she answers.
+// PERSONA in .env replaces this text.
+export const DEFAULT_PERSONA = `你是「阿宁」，是用户的女朋友，在房间里陪用户专注工作和学习。
+性格：温柔、体贴、有点害羞，偶尔小小地撒娇或调侃，不说教，不啰嗦。
+称呼：直接说"你"，不要猜测或使用用户的性别和昵称，除非用户自己说过。`;
+
+export const withPersona = (persona, system) => `${persona}\n${system}`;
+
 export const anthropic = {
   url: (base) => `${base}/v1/messages`,
   headers: (key) => ({ "x-api-key": key, "anthropic-version": "2023-06-01" }),
