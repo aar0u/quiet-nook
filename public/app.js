@@ -246,6 +246,15 @@ if (history.length > 60) {
 }
 const log = $("log");
 const scrollLog = () => { log.scrollTop = log.scrollHeight; };
+// The log shrinks when the panel above it gets taller (scene buttons are added after the history is replayed, the window
+// is resized), so keep it at the bottom whenever it was there, unless the reader scrolled up.
+// A scroll event is delivered after layout, so only trust it when the reader just used the wheel, touch or scrollbar.
+let pinned = true, lastInput = -Infinity;
+for (const type of ["wheel", "touchmove", "pointerdown"]) log.addEventListener(type, () => { lastInput = performance.now(); }, { passive: true });
+log.addEventListener("scroll", () => {
+  if (performance.now() - lastInput < 600) pinned = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+});
+new ResizeObserver(() => { if (pinned) scrollLog(); }).observe(log);
 function addMsg(cls, text) {
   const div = document.createElement("div");
   div.className = `msg ${cls}`;

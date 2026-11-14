@@ -2,7 +2,7 @@ export const EXPRESSIONS = ["neutral", "happy", "shy", "sleepy", "think", "cheer
 export const ROOMS = [{ id: "floor", name: "地毯" }, { id: "desk", name: "书桌" }];
 const PANES = [[964, 165, 266, 365], [1267, 145, 270, 385]];
 export const SCENES = [
-  { id: "floor-afternoon", room: "floor", name: "地毯", look: { tint: [1.0, 0.98, 0.94], shadow: [-10, 12] } },
+  { id: "floor-afternoon", room: "floor", name: "地毯", noSteam: true, fx: "dust", dust: "255,240,200", look: { tint: [1.0, 0.98, 0.94], shadow: [-10, 12] } },
   { id: "day", room: "desk", name: "午后", noSteam: true, fx: "dust", dust: "255,240,200", look: { tint: [1.0, 0.98, 0.94], shadow: [-10, 12] } },
   { id: "dusk", room: "desk", name: "黄昏", fx: "dust", dust: "255,205,150", lamp: { pos: [150, 560], rgb: [1.0, 0.66, 0.3], k: 0.14 }, look: { tint: [1.0, 0.86, 0.74], shadow: [-8, 12] } },
   { id: "rain", room: "desk", name: "雨夜", fx: "rain", glass: PANES, lamp: { pos: [150, 560], rgb: [1.0, 0.72, 0.4], k: 0.16 }, look: { tint: [0.9, 0.9, 0.97], shadow: [10, 12] } },
@@ -176,9 +176,10 @@ export function headBounds(pixels, width, height) {
   return { left: left / width, right: (right + 1) / width, top: top / height, bottom: end / height };
 }
 
+const frame = (img) => ({ img, tex: gl ? upload(img, true) : null });
+
 async function loadLook(l) {
   if (looks[l.id]) return looks[l.id];
-  const frame = (img) => ({ img, tex: gl ? upload(img, true) : null });
   const img = await decode(l.src);
   const sample = document.createElement("canvas");
   sample.width = 256; sample.height = Math.round(256 * img.height / img.width);
@@ -186,21 +187,30 @@ async function loadLook(l) {
   sampleCtx.drawImage(img, 0, 0, sample.width, sample.height);
   const head = headBounds(sampleCtx.getImageData(0, 0, sample.width, sample.height).data, sample.width, sample.height);
   const set = { neutral: frame(img), head };
-  if (l.fullFaces) {
-    const names = EXPRESSIONS.filter((name) => name !== "neutral");
-    const variants = await Promise.all(names.map((name) => decode(`${l.faces}/${name}.webp`)));
-    names.forEach((name, i) => {
-      const fit = FULL_FRAME_FITS[l.faces]?.[name];
-      if (!fit) { set[name] = frame(variants[i]); return; }
-      const canvas = document.createElement("canvas");
-      canvas.width = img.width; canvas.height = img.height;
-      const [scale, x, y] = fit;
-      canvas.getContext("2d").drawImage(variants[i], x, y, variants[i].width * scale, variants[i].height * scale);
-      set[name] = frame(canvas);
-    });
-  }
+  looks[l.id] = set;
+  // The first frame only needs neutral. The other expressions and the blink fill in while she is already on screen;
+  // until then her[name] || her.neutral shows neutral.
+  loadExtras(l, img, set).catch((e) => console.error(`look ${l.id}:`, e));
+  return set;
+}
+
+async function loadExtras(l, img, set) {
+  const names = l.fullFaces ? EXPRESSIONS.filter((name) => name !== "neutral") : [];
+  const [variants, blinkImg] = await Promise.all([
+    Promise.all(names.map((name) => decode(`${l.faces}/${name}.webp`))),
+    l.faces ? decode(`${l.faces}/blink.webp`) : null,
+  ]);
+  names.forEach((name, i) => {
+    const fit = FULL_FRAME_FITS[l.faces]?.[name];
+    if (!fit) { set[name] = frame(variants[i]); return; }
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width; canvas.height = img.height;
+    const [scale, x, y] = fit;
+    canvas.getContext("2d").drawImage(variants[i], x, y, variants[i].width * scale, variants[i].height * scale);
+    set[name] = frame(canvas);
+  });
   if (l.faces) {
-    const layout = FACE_LAYOUTS[l.faces], variant = await decode(`${l.faces}/blink.webp`);
+    const layout = FACE_LAYOUTS[l.faces], variant = blinkImg;
     const canvas = document.createElement("canvas");
     canvas.width = img.width; canvas.height = img.height;
     const ctx = canvas.getContext("2d");
@@ -233,7 +243,6 @@ async function loadLook(l) {
     }
     set.blink = frame(canvas);
   }
-  return (looks[l.id] = set);
 }
 
 export async function setLook(id) {
@@ -330,7 +339,6 @@ function makeParts() {
 }
 
 function drawFx(dt, t) {
-  if (scene.room !== "desk") return;
   if (scene.fx === "rain" || scene.fx === "snow") {
     const bottom = Math.max(...scene.glass.map((r) => r[1] + r[3]));
     fx.save();
