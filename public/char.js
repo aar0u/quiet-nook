@@ -15,9 +15,14 @@ const CLOCK_LIGHTS = {
   rain: { shade: 0.14, rgb: [255, 165, 100], glow: 0.14 },
   snow: { shade: 0.12, rgb: [255, 185, 125], glow: 0.12 },
 };
+export const COMPANION = /[?&]companion\b/.test(location.search);
+// Desktop companion window, in world pixels: the visible crop (with head room for the speech bubble) and the soft ellipse
+// of room plate kept under her; the plate fades to transparent towards the ellipse edge.
+// The crop ends at the bottom of the plate; the one-line chat box covers its lowest ~100px, below her feet.
+const FLOOR_COMPANION = { crop: [270, 7, 1034, 941], patch: [625, 730, 330, 140], feather: 0.55 };
 export const LOOKS = [
-  { id: "floor-cheek", room: "floor", name: "托腮", src: "looks/floor-cheek/neutral.webp", faces: "looks/floor-cheek", fullFaces: true, fit: [0.72, 600, 700, -120] },
-  { id: "floor-rest", room: "floor", name: "轻搭", src: "looks/floor-rest/neutral.webp", faces: "looks/floor-rest", fullFaces: true, fit: [0.72, 600, 700, -120] },
+  { id: "floor-cheek", room: "floor", name: "托腮", src: "looks/floor-cheek/neutral.webp", faces: "looks/floor-cheek", fullFaces: true, fit: [0.72, 600, 539, -120], companion: FLOOR_COMPANION },
+  { id: "floor-rest", room: "floor", name: "轻搭", src: "looks/floor-rest/neutral.webp", faces: "looks/floor-rest", fullFaces: true, fit: [0.72, 600, 539, -120], companion: FLOOR_COMPANION },
   { id: "desk-default", room: "desk", name: "居家", src: "looks/default/neutral.webp", faces: "looks/default", fullFaces: true, fit: [0.82, 0, 520, 52] },
   { id: "desk-rose", room: "desk", name: "外出", src: "looks/rose/neutral.webp", faces: "looks/rose", fullFaces: true, fit: [0.95, 0, 120, 158] },
   { id: "desk-sleep", room: "desk", name: "睡前", src: "looks/sleep/neutral.webp", faces: "looks/sleep", fullFaces: true, fit: [0.7, 0, 686, 191], when: "break" },
@@ -79,13 +84,15 @@ precision highp float;
 #else
 precision mediump float;
 #endif
-uniform sampler2D uA, uB, uPlate; uniform float uMix, uT, uFloor; uniform vec2 uShadow;
+uniform sampler2D uA, uB, uPlate; uniform float uMix, uT, uFloor, uFeather; uniform vec2 uShadow;
+uniform vec4 uPatch;  // companion window: x, y, rx, ry of the ellipse (px) that keeps the room plate; rx = 0 keeps all of it
 uniform vec3 uTint, uLampRgb; uniform vec4 uFit, uLamp;  // uLamp: x, y, k (strength, 0 = off), unused
 varying vec2 uv;
 vec4 her(vec2 p){
   // uFit places the look in the room: scale about an anchor point (px), then shift right by dx px
   vec2 size = vec2(1672., 941.);
   vec2 q = (uFit.yz + (p * size - uFit.yz - vec2(uFit.w, 0.)) / uFit.x) / size;
+  if (q.x < 0. || q.x > 1. || q.y < 0. || q.y > 1.) return vec4(0.);  // clamping would smear the edge row into streaks
   return uMix >= 1. ? texture2D(uB, q) : mix(texture2D(uA, q), texture2D(uB, q), uMix);  // skip uA when no fade is running
 }
 void main(){
@@ -114,8 +121,9 @@ void main(){
   float s = 0.;                                                      // her shadow on the room: her alpha, offset
   for (int i = 0; i < 5; i++) s += her(p - uShadow * (.4 + .35 * float(i)) * inv).a;  // and softened by 5 taps
   room *= 1. - .3 * s / 5.;
-  vec3 col = g.rgb * uTint + room * (1. - g.a);
-  gl_FragColor = vec4(col, 1.);
+  float keep = uPatch.z > 0. ? 1. - smoothstep(1. - uFeather, 1., length((px - uPatch.xy) / uPatch.zw)) : 1.;
+  vec3 col = g.rgb * uTint + room * keep * (1. - g.a);              // premultiplied: she is on top of the kept plate
+  gl_FragColor = vec4(col, uPatch.z > 0. ? g.a + keep * (1. - g.a) : 1.);  // exactly opaque outside the companion window
 }`;
 
 function compile(type, src) {
@@ -139,7 +147,7 @@ function initGL(canvas) {
   const p = gl.getAttribLocation(prog, "p");
   gl.enableVertexAttribArray(p);
   gl.vertexAttribPointer(p, 2, gl.FLOAT, false, 0, 0);
-  loc = Object.fromEntries(["uA", "uB", "uPlate", "uMix", "uT", "uFloor", "uShadow", "uTint", "uFit", "uLamp", "uLampRgb"].map((n) => [n, gl.getUniformLocation(prog, n)]));
+  loc = Object.fromEntries(["uA", "uB", "uPlate", "uMix", "uT", "uFloor", "uFeather", "uPatch", "uShadow", "uTint", "uFit", "uLamp", "uLampRgb"].map((n) => [n, gl.getUniformLocation(prog, n)]));
   gl.uniform1i(loc.uA, 0);
   gl.uniform1i(loc.uB, 1);
   gl.uniform1i(loc.uPlate, 2);
@@ -185,8 +193,10 @@ async function loadLook(l) {
   sample.width = 256; sample.height = Math.round(256 * img.height / img.width);
   const sampleCtx = sample.getContext("2d", { willReadFrequently: true });
   sampleCtx.drawImage(img, 0, 0, sample.width, sample.height);
-  const head = headBounds(sampleCtx.getImageData(0, 0, sample.width, sample.height).data, sample.width, sample.height);
-  const set = { neutral: frame(img), head };
+  const pixels = sampleCtx.getImageData(0, 0, sample.width, sample.height).data;
+  const head = headBounds(pixels, sample.width, sample.height);
+  const alpha = Uint8Array.from({ length: sample.width * sample.height }, (_, i) => pixels[i * 4 + 3]);  // for companion hit tests
+  const set = { neutral: frame(img), head, alpha: { w: sample.width, h: sample.height, data: alpha } };
   looks[l.id] = set;
   // The first frame only needs neutral. The other expressions and the blink fill in while she is already on screen;
   // until then her[name] || her.neutral shows neutral.
@@ -253,6 +263,7 @@ export async function setLook(id) {
   if (next === look && her) return next.id;
   look = next;
   her = set;
+  if (COMPANION) layoutCompanion();
   B = her[expr] || her.neutral;
   A = B;
   mixStart = performance.now();
@@ -313,6 +324,9 @@ function drawScene(now, t) {
   gl.uniform1f(loc.uMix, mix);
   gl.uniform1f(loc.uT, still ? 0 : t);
   gl.uniform1f(loc.uFloor, scene.room === "floor" ? 1 : 0);
+  const patch = COMPANION && look.companion;
+  gl.uniform4f(loc.uPatch, ...(patch ? patch.patch : [0, 0, 0, 0]));
+  gl.uniform1f(loc.uFeather, patch ? patch.feather : 0);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
 
@@ -449,6 +463,46 @@ export function say(text) {
 }
 export function setView(x0, x1, y0 = 0, y1 = 941) { Object.assign(view, { x0, x1, y0, y1 }); dirty = true; }
 
+// ---------------- desktop companion window (?companion): show only a crop of the world around her ----------------
+const cropBox = { ox: 0, oy: 0, s: 0 };
+// Scale and offset that fit the crop rectangle (world px) inside a w x h window, centred.
+export function cropFit([x0, y0, x1, y1], w, h) {
+  const s = Math.min(w / (x1 - x0), h / (y1 - y0));
+  return { s, ox: (w - (x1 - x0) * s) / 2 - x0 * s, oy: (h - (y1 - y0) * s) / 2 - y0 * s };
+}
+
+// Looks without a companion crop (the desk scenes) fill the window like the normal page: cover it. The view starts just
+// right of the desk clock (world x 56 to 231), which would be cut by the window edge.
+const DESK_VIEW_LEFT = 232;
+export function coverFit(w, h) {
+  const s = Math.max(w / 1672, h / 941);
+  return { s, ox: Math.max(w - 1672 * s, -DESK_VIEW_LEFT * s), oy: (h - 941 * s) / 2 };  // never past the right edge
+}
+
+export function layoutCompanion() {
+  const crop = look.companion?.crop;
+  const w = innerWidth, h = innerHeight;
+  const { s, ox, oy } = crop ? cropFit(crop, w, h) : coverFit(w, h);
+  Object.assign(cropBox, { ox, oy, s });
+  $("world").style.transform = `translate(${ox}px, ${oy}px) scale(${s})`;
+  setView(-ox / s, (w - ox) / s, -oy / s, (h - oy) / s);
+}
+
+// True where the window should catch the mouse: on her, or on the kept patch of floor. Elsewhere clicks pass through.
+// A look without a companion crop shows a full, opaque room, so the whole window counts.
+export function companionHit(clientX, clientY) {
+  const p = look.companion;
+  if (!p) return true;
+  if (!her?.alpha || !cropBox.s) return false;
+  const wx = (clientX - cropBox.ox) / cropBox.s, wy = (clientY - cropBox.oy) / cropBox.s;
+  const [scale, anchorX, anchorY, shift] = look.fit, { w, h, data } = her.alpha, img = her.neutral.img;
+  const sx = Math.floor(((wx - anchorX * (1 - scale) - shift) / scale) / img.width * w);
+  const sy = Math.floor(((wy - anchorY * (1 - scale)) / scale) / img.height * h);
+  if (sx >= 0 && sy >= 0 && sx < w && sy < h && data[sy * w + sx] > 32) return true;
+  const [cx, cy, rx, ry] = p.patch, d = Math.hypot((wx - cx) / rx, (wy - cy) / ry);
+  return d < 1 - p.feather / 2;  // the opaque core and the first half of the fade
+}
+
 function wrap(text, width) {
   fx.font = BUBBLE.font;
   const lines = [];
@@ -469,7 +523,16 @@ function drawBubble(now) {
   if (bubble.out && alpha === 0) { bubble.text = ""; bubble.out = 0; return; }
   fx.font = BUBBLE.font;
   bubble.spanW = Math.max(bubble.spanW, fx.measureText(bubble.text).width);
-  const w = Math.max(1, Math.min(BUBBLE.w, vw - 32, Math.max(160, bubble.spanW + 2 * pad)));
+  const [scale, anchorX, anchorY, shift] = look.fit;
+  const img = her.neutral.img, bounds = her.head;
+  const left = bounds ? anchorX * (1 - scale) + shift + bounds.left * img.width * scale : (view.x0 + view.x1) / 2;
+  const right = bounds ? anchorX * (1 - scale) + shift + bounds.right * img.width * scale : left;
+  const top = bounds ? anchorY * (1 - scale) + bounds.top * img.height * scale : view.y0;
+  const gap = 18;
+  // The companion window has little room beside her, so the bubble takes what is free on her right if that is enough.
+  const freeRight = view.x1 - 16 - (right + gap);
+  const maxW = COMPANION && freeRight >= 160 ? Math.min(BUBBLE.w, freeRight) : BUBBLE.w;
+  const w = Math.max(1, Math.min(maxW, vw - 32, Math.max(160, bubble.spanW + 2 * pad)));
   if (!bubble.lines || bubble.wrapW !== w) {
     bubble.wrapW = w;
     bubble.lines = wrap(bubble.text, w);
@@ -479,16 +542,11 @@ function drawBubble(now) {
     bubble.descent = Math.max(...metrics.map((m) => m.actualBoundingBoxDescent));
   }
   const h = bubble.lines.length * line + pad * 1.4;
-  const [scale, anchorX, anchorY, shift] = look.fit;
-  const img = her.neutral.img, bounds = her.head;
-  const left = bounds ? anchorX * (1 - scale) + shift + bounds.left * img.width * scale : (view.x0 + view.x1) / 2;
-  const right = bounds ? anchorX * (1 - scale) + shift + bounds.right * img.width * scale : left;
-  const top = bounds ? anchorY * (1 - scale) + bounds.top * img.height * scale : view.y0;
-  const gap = 18, minX = view.x0 + 16, maxX = Math.max(minX, view.x1 - w - 16);
+  const minX = view.x0 + 16, maxX = Math.max(minX, view.x1 - w - 16);
   // The side is chosen for the widest possible bubble, so it does not flip when pages differ in width.
-  const sideW = Math.min(BUBBLE.w, vw - 32);
+  const sideW = Math.min(maxW, vw - 32);
   const leftFits = left - sideW - gap >= minX, rightFits = right + gap <= view.x1 - sideW - 16;
-  const x = leftFits ? left - w - gap : rightFits ? right + gap : Math.max(minX, Math.min(maxX, (left + right - w) / 2));
+  const x = COMPANION && rightFits ? right + gap : leftFits ? left - w - gap : rightFits ? right + gap : Math.max(minX, Math.min(maxX, (left + right - w) / 2));
   const preferredY = leftFits || rightFits ? top : top - h - gap;
   const y = Math.max(view.y0 + 16, Math.min(preferredY, Math.max(view.y0 + 16, view.y1 - h - 16)));
   fx.save();
@@ -547,7 +605,7 @@ function scheduleBlink() {
 
 function tick(now) {
   requestAnimationFrame(tick);
-  if (!her || !room || room.id !== scene.id || look.room !== scene.room || now - last < 8) return;
+  if (!her || !room || room.id !== scene.id || look.room !== scene.room || now - last < (COMPANION ? 28 : 8)) return;  // the companion window is always on screen: ~30fps saves power
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
   if (still && !dirty) return;

@@ -1,4 +1,4 @@
-import { mountScene, setScene, setLook, LOOKS, ROOMS, setExpression as showExpression, setClock, ringClock, onClockClick, say, setView, EXPRESSIONS, SCENES } from "./char.js";
+import { COMPANION, mountScene, setScene, setLook, LOOKS, ROOMS, setExpression as showExpression, setClock, ringClock, onClockClick, say, setView, EXPRESSIONS, SCENES } from "./char.js";
 import { bubblePages, bubbleDuration } from "./bubble-text.js";
 import { createChatQueue } from "./chat-queue.js";
 import { remainingSeconds, restoreTimer } from "./timer-state.js";
@@ -169,7 +169,7 @@ for (const name of SOUNDS) {
 
 // ---------- scene, panel visibility ----------
 const SCENE_SOUND = { "floor-afternoon": { rain: 0, brown: 15 }, day: { rain: 0, brown: 15 }, dusk: { rain: 0, brown: 10 }, rain: { rain: 60, brown: 20 }, snow: { rain: 0, brown: 35 } };
-let activeRoom = ROOMS.some((r) => r.id === load("room", "floor")) ? load("room", "floor") : "floor";
+let activeRoom = !COMPANION && ROOMS.some((r) => r.id === load("room", "floor")) ? load("room", "floor") : "floor";  // the companion always sits on the carpet
 $("autoSound").checked = load("autoSound", true);
 $("autoSound").onchange = () => save("autoSound", $("autoSound").checked);
 
@@ -282,6 +282,7 @@ function showBubble(text) {
 async function sendMessage(text, silentUser = false) {
   const message = { role: "user", content: text, display: silentUser ? undefined : text };
   const botEl = addMsg("bot", "…");
+  if (COMPANION) showBubble("…");  // the companion window has no chat log, so the bubble carries the waiting and error states
   let full = "", displaced = [];
   try {
     if (history.length >= 60) displaced = history.splice(0, history.length - 59);
@@ -310,6 +311,7 @@ async function sendMessage(text, silentUser = false) {
     botEl.className = "msg err";
     botEl.textContent = `出错了：${e instanceof TypeError ? "无法连接到服务器" : e.message}`;
     scrollLog();
+    if (COMPANION) showBubble(botEl.textContent);
     const index = history.indexOf(message);
     if (index !== -1) history.splice(index, 1);
     history.unshift(...displaced);
@@ -387,9 +389,11 @@ save("scene", initialScene);
 mountScene(initialScene, lookNow());
 renderRoomOptions(initialScene);
 lookReady = true;
+if (COMPANION) import("./companion.js");
 
 // Scale #world to cover the window and slide it so she (world x = 560) sits in the space the panel leaves free.
 function layoutWorld() {
+  if (COMPANION) return;  // companion.js crops the world to the window instead
   const w = $("stage").clientWidth, h = $("stage").clientHeight;
   const s = Math.max(w / 1672, h / 941);
   const narrow = matchMedia("(max-width: 760px)").matches;
@@ -402,4 +406,4 @@ function layoutWorld() {
 }
 addEventListener("resize", layoutWorld);
 setPanel(load("panelOpen", true));
-requestAnimationFrame(() => $("world").classList.add("ready"));
+if (!COMPANION) requestAnimationFrame(() => $("world").classList.add("ready"));  // the companion window must not animate into its crop

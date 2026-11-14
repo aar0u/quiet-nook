@@ -5,8 +5,33 @@ import test from "node:test";
 
 globalThis.matchMedia = () => ({ matches: false });
 globalThis.location = { search: "" };
-const { ROOMS, SCENES, LOOKS, EXPRESSIONS, headBounds } = await import("./public/char.js");
+const { ROOMS, SCENES, LOOKS, EXPRESSIONS, headBounds, cropFit, coverFit } = await import("./public/char.js");
 const publicDir = path.resolve("public");
+
+test("a companion crop is centred in the window and keeps its aspect", () => {
+  const crop = [270, 0, 980, 934];
+  for (const [w, h] of [[400, 526], [800, 526], [400, 1000]]) {
+    const { s, ox, oy } = cropFit(crop, w, h);
+    const left = crop[0] * s + ox, right = crop[2] * s + ox, top = crop[1] * s + oy, bottom = crop[3] * s + oy;
+    assert.ok(left >= -1e-9 && top >= -1e-9 && right <= w + 1e-9 && bottom <= h + 1e-9);
+    assert.ok(Math.abs(left - (w - right)) < 1e-9 && Math.abs(top - (h - bottom)) < 1e-9);
+  }
+});
+
+test("the cover fit fills the window and starts right of the desk clock", () => {
+  for (const [w, h] of [[430, 526], [1440, 900], [300, 900]]) {
+    const { s, ox, oy } = coverFit(w, h);
+    assert.ok(oy <= 1e-9 && 1672 * s + ox >= w - 1e-9 && 941 * s + oy >= h - 1e-9);
+    if (w < 1000) assert.ok(Math.abs(232 * s + ox) < 1e-9);  // the window's left edge is world x 232
+  }
+});
+
+test("every look with a companion crop has a patch inside it", () => {
+  for (const look of LOOKS.filter((l) => l.companion)) {
+    const [x0, y0, x1, y1] = look.companion.crop, [cx, cy, rx, ry] = look.companion.patch;
+    assert.ok(cx - rx >= x0 && cx + rx <= x1 && cy - ry >= y0 && cy + ry <= y1, look.id);
+  }
+});
 
 test("head bounds use the upper part of the visible silhouette", () => {
   const width = 10, height = 10, pixels = new Uint8ClampedArray(width * height * 4);

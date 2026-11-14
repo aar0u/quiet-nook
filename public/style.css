@@ -11,6 +11,14 @@ body {
 
 #stage { position: fixed; inset: 0; overflow: hidden; background: #14111f; }
 
+/* Desktop companion (?companion): transparent window, no panel */
+.companion body, .companion #stage { background: transparent; }
+.companion #panel { display: none; }
+#companionChat {
+  position: fixed; left: 14px; right: 14px; bottom: 12px; padding: 6px;
+  background: var(--panel); backdrop-filter: blur(10px); border: 1px solid #ffffff1c; border-radius: 14px;
+}
+
 #panel {
   position: fixed; top: 12px; right: 12px; bottom: 12px; width: 340px;
   display: flex; flex-direction: column; gap: 12px; padding: 14px; min-height: 0;
