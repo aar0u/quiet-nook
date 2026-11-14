@@ -39,7 +39,8 @@ The server keeps your key out of the browser. It picks a backend from the enviro
 |---|---|---|
 | `anthropic` | `ANTHROPIC_API_KEY` is set | `CP_MODEL` (default `claude-sonnet-5-5`), `ANTHROPIC_BASE_URL` |
 | `openai` | `OPENAI_API_KEY` is set | `CP_MODEL` (default `gpt-4o-mini`), `OPENAI_BASE_URL` for any OpenAI-compatible endpoint |
-| `opencode` | neither key is set | a running local [opencode](https://opencode.ai) service; `OPENCODE_URL` (its port changes on restart), `CP_MODEL`, `CP_PROVIDER` |
+| `vertex` | `GOOGLE_APPLICATION_CREDENTIALS` points to a service account key JSON | `CP_MODEL` (default `google/gemini-3.8-flash`; Google retires Gemini models on a schedule, so a 404 usually means the model id is gone), `VERTEX_LOCATION` (default `global`); the project comes from the key file. The service account needs the Vertex AI User role. |
+| `opencode` | none of the above is set | a running local [opencode](https://opencode.ai) service; `OPENCODE_URL` (its port changes on restart), `CP_MODEL`, `CP_PROVIDER` |
 
 The server listens on `127.0.0.1` only. Set `HOST=0.0.0.0` only if you understand that anyone who can reach the port can spend your API quota.
 
