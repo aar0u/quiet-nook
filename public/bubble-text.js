@@ -1,4 +1,5 @@
 export function bubblePages(text, limit = 42) {
+  text = text.replace(/\s*\n\s*/g, "").trim();  // paragraph breaks would otherwise show up as a blank gap at the start of a page
   const pages = [];
   let page = "";
   const sentences = text.match(/[^。！？!?]+[。！？!?]*|[。！？!?]+/gu) || [];

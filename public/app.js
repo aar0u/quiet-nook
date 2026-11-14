@@ -11,12 +11,21 @@ function setExpression(expression) {
   showExpression(currentExpression);
 }
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
-const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage blocked */ } };
+let storageWarned = false;
+const save = (k, v) => {
+  try { localStorage.setItem(k, JSON.stringify(v)); } catch {
+    if (storageWarned) return;
+    storageWarned = true;
+    // Deferred: `log` is created further down this module, after the first saves run.
+    setTimeout(() => addMsg("err", "无法保存到浏览器存储，刷新或关闭后聊天记录和计时会丢失。"), 0);
+  }
+};
 
 // ---------- timer ----------
 const timer = { mode: "focus", left: 25 * 60, running: false, tick: null, endAt: 0 };
 let lookReady = false;  // set once the scene is mounted; before that a mode change has no look to apply
-const minutes = () => ({ focus: +$("focusMin").value || 25, break: +$("breakMin").value || 5 });
+const clampMin = (id, fallback) => Math.min(+$(id).max, Math.max(+$(id).min, +$(id).value || fallback));
+const minutes = () => ({ focus: clampMin("focusMin", 25), break: clampMin("breakMin", 5) });
 const saveTimer = () => save("timer", { mode: timer.mode, left: timer.left, running: timer.running, endAt: timer.endAt });
 
 function renderClock() {
@@ -261,7 +270,7 @@ function showBubble(text) {
   showNext();
 }
 
-async function sendMessage(text, silentUser = false, el = null) {
+async function sendMessage(text, silentUser = false) {
   const message = { role: "user", content: text, display: silentUser ? undefined : text };
   const botEl = addMsg("bot", "…");
   let full = "", displaced = [];
@@ -290,20 +299,19 @@ async function sendMessage(text, silentUser = false, el = null) {
     history.push({ role: "assistant", content: full, display: clean });
   } catch (e) {
     botEl.className = "msg err";
-    botEl.textContent = `出错了：${e.message}`;
+    botEl.textContent = `出错了：${e instanceof TypeError ? "无法连接到服务器" : e.message}`;
     scrollLog();
     const index = history.indexOf(message);
     if (index !== -1) history.splice(index, 1);
     history.unshift(...displaced);
-    if (silentUser === false && el) el.classList.add("err");
   }
   if (history.length > 60) history.splice(0, history.length - 60);
   save("history2", history);
 }
 const enqueueMessage = createChatQueue(sendMessage);
 function speak(text, silentUser = false) {
-  const el = silentUser ? null : addMsg("user", text);
-  return enqueueMessage(text, silentUser, el);
+  if (!silentUser) addMsg("user", text);
+  return enqueueMessage(text, silentUser);
 }
 if (restoredTimer?.finished) announcePhaseEnd(restoredTimer.finished);
 

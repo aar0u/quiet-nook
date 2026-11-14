@@ -64,4 +64,4 @@ input[type=number] { width: 52px; padding: 2px 6px; background: #00000040; borde
 .msg { padding: 6px 10px; border-radius: 10px; max-width: 90%; white-space: pre-wrap; }
 .msg.user { align-self: flex-end; background: #f4b6a033; }
 .msg.bot { align-self: flex-start; background: #ffffff14; }
-.msg.err { align-self: center; color: #ff9b9b; }
+.msg.err { align-self: center; padding: 2px 10px; color: #ff9b9b; font-size: 13px; text-align: center; }

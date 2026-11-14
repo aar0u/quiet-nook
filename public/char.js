@@ -60,11 +60,10 @@ let look = LOOKS[0], looks = {};  // looks[id] = her frames {face: {img, tex}}, 
 let her = null;   // the current look's frames
 let room = null;  // the current scene's plate {plate, plateTex}
 let A = null, B = null, mixStart = 0, mixMs = FADE_MS, dirty = true;
-const mouse = { x: 0, y: 0, tx: 0, ty: 0 };
 let fx, fxc, last = 0, parts = [];
 const clock = { time: "25:00", mode: "专注", running: false, ringUntil: 0 };
 let onClick = () => {};
-const bubble = { text: "", lines: null, wrapW: 0, t0: 0 };
+const bubble = { text: "", lines: null, wrapW: 0, t0: 0, out: 0, spanW: 0 };
 const view = { x0: 0, x1: 1672, y0: 0, y1: 941 };
 
 // ---------------- scene (WebGL) ----------------
@@ -80,14 +79,14 @@ precision highp float;
 #else
 precision mediump float;
 #endif
-uniform sampler2D uA, uB, uPlate; uniform float uMix, uT, uFloor; uniform vec2 uMouse, uShadow;
+uniform sampler2D uA, uB, uPlate; uniform float uMix, uT, uFloor; uniform vec2 uShadow;
 uniform vec3 uTint, uLampRgb; uniform vec4 uFit, uLamp;  // uLamp: x, y, k (strength, 0 = off), unused
 varying vec2 uv;
 vec4 her(vec2 p){
   // uFit places the look in the room: scale about an anchor point (px), then shift right by dx px
   vec2 size = vec2(1672., 941.);
   vec2 q = (uFit.yz + (p * size - uFit.yz - vec2(uFit.w, 0.)) / uFit.x) / size;
-  return mix(texture2D(uA, q), texture2D(uB, q), uMix);
+  return uMix >= 1. ? texture2D(uB, q) : mix(texture2D(uA, q), texture2D(uB, q), uMix);  // skip uA when no fade is running
 }
 void main(){
   vec2 px = uv * vec2(1672., 941.);
@@ -97,13 +96,13 @@ void main(){
   float body = smoothstep(380., 520., px.y) * (1. - smoothstep(620., 760., px.y));
   float head = 1. - smoothstep(380., 520., px.y);
   vec2 d = vec2(0., -sin(uT * 1.2) * (1.2 + 2.2 * body) * rest);  // breathing, strongest at the shoulders
-  d += vec2(uMouse.x * 1.3 + sin(uT * .45) * 0.5, uMouse.y * 1.1) * head; // head leans toward the cursor
+  d.x += sin(uT * .45) * 0.5 * head;                                // slow head sway
   float lum = dot(h0.rgb, vec3(.299, .587, .114)) / max(h0.a, .001);
   float hair = h0.a * smoothstep(.40, .16, lum) * smoothstep(300., 700., px.y) * rest;
   d.x += hair * sin(uT * .9 + px.y * .012 + px.x * .004) * 1.2;     // long hair sways below the chin
   float upper = 1. - smoothstep(500., 620., px.y);
   float shoulders = smoothstep(330., 420., px.y) * (1. - smoothstep(490., 590., px.y));
-  vec2 floorMotion = vec2(d.x, -sin(uT * 1.2) * (0.35 * upper + 1.15 * shoulders) + uMouse.y * 1.1 * head);
+  vec2 floorMotion = vec2(d.x, -sin(uT * 1.2) * (0.35 * upper + 1.15 * shoulders));
   d = mix(d, floorMotion, uFloor);
   vec2 p = uv - d * inv;
   vec4 g = her(p);
@@ -140,7 +139,7 @@ function initGL(canvas) {
   const p = gl.getAttribLocation(prog, "p");
   gl.enableVertexAttribArray(p);
   gl.vertexAttribPointer(p, 2, gl.FLOAT, false, 0, 0);
-  loc = Object.fromEntries(["uA", "uB", "uPlate", "uMix", "uT", "uFloor", "uMouse", "uShadow", "uTint", "uFit", "uLamp", "uLampRgb"].map((n) => [n, gl.getUniformLocation(prog, n)]));
+  loc = Object.fromEntries(["uA", "uB", "uPlate", "uMix", "uT", "uFloor", "uShadow", "uTint", "uFit", "uLamp", "uLampRgb"].map((n) => [n, gl.getUniformLocation(prog, n)]));
   gl.uniform1i(loc.uA, 0);
   gl.uniform1i(loc.uB, 1);
   gl.uniform1i(loc.uPlate, 2);
@@ -305,7 +304,6 @@ function drawScene(now, t) {
   gl.uniform1f(loc.uMix, mix);
   gl.uniform1f(loc.uT, still ? 0 : t);
   gl.uniform1f(loc.uFloor, scene.room === "floor" ? 1 : 0);
-  gl.uniform2f(loc.uMouse, still ? 0 : mouse.x, still ? 0 : mouse.y);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
 
@@ -429,7 +427,18 @@ export function ringClock(ms) { clock.ringUntil = performance.now() + ms; dirty 
 export function onClockClick(cb) { onClick = cb; }
 
 // ---------------- speech bubble (also on the canvas, so the side panel is the only DOM) ----------------
-export function say(text) { bubble.text = text; bubble.lines = null; bubble.t0 = performance.now(); dirty = true; }
+export function say(text) {
+  const now = performance.now();
+  if (!text) {
+    if (bubble.text && !still) bubble.out = now; else bubble.text = "";
+  } else {
+    if (!bubble.text || bubble.out) { bubble.t0 = now; bubble.spanW = 0; }  // paging between texts keeps the bubble solid and as wide as its widest page
+    bubble.out = 0;
+    bubble.text = text;
+  }
+  bubble.lines = null;
+  dirty = true;
+}
 export function setView(x0, x1, y0 = 0, y1 = 941) { Object.assign(view, { x0, x1, y0, y1 }); dirty = true; }
 
 function wrap(text, width) {
@@ -447,8 +456,12 @@ function drawBubble(now) {
   if (!bubble.text) return;
   const { pad, line } = BUBBLE;
   const vw = view.x1 - view.x0;
+  let alpha = Math.max(0, Math.min(1, (now - bubble.t0) / 200));
+  if (bubble.out) alpha *= Math.max(0, 1 - (now - bubble.out) / 200);
+  if (bubble.out && alpha === 0) { bubble.text = ""; bubble.out = 0; return; }
   fx.font = BUBBLE.font;
-  const w = Math.max(1, Math.min(BUBBLE.w, vw - 32, Math.max(160, fx.measureText(bubble.text).width + 2 * pad)));
+  bubble.spanW = Math.max(bubble.spanW, fx.measureText(bubble.text).width);
+  const w = Math.max(1, Math.min(BUBBLE.w, vw - 32, Math.max(160, bubble.spanW + 2 * pad)));
   if (!bubble.lines || bubble.wrapW !== w) {
     bubble.wrapW = w;
     bubble.lines = wrap(bubble.text, w);
@@ -464,12 +477,14 @@ function drawBubble(now) {
   const right = bounds ? anchorX * (1 - scale) + shift + bounds.right * img.width * scale : left;
   const top = bounds ? anchorY * (1 - scale) + bounds.top * img.height * scale : view.y0;
   const gap = 18, minX = view.x0 + 16, maxX = Math.max(minX, view.x1 - w - 16);
-  const leftFits = left - w - gap >= minX, rightFits = right + gap <= maxX;
+  // The side is chosen for the widest possible bubble, so it does not flip when pages differ in width.
+  const sideW = Math.min(BUBBLE.w, vw - 32);
+  const leftFits = left - sideW - gap >= minX, rightFits = right + gap <= view.x1 - sideW - 16;
   const x = leftFits ? left - w - gap : rightFits ? right + gap : Math.max(minX, Math.min(maxX, (left + right - w) / 2));
   const preferredY = leftFits || rightFits ? top : top - h - gap;
   const y = Math.max(view.y0 + 16, Math.min(preferredY, Math.max(view.y0 + 16, view.y1 - h - 16)));
   fx.save();
-  fx.globalAlpha = Math.min(1, (now - bubble.t0) / 200);
+  fx.globalAlpha = alpha;
   fx.shadowColor = "rgba(62, 39, 24, 0.2)";
   fx.shadowBlur = 14;
   fx.shadowOffsetY = 3;
@@ -528,8 +543,6 @@ function tick(now) {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
   if (still && !dirty) return;
-  mouse.x += (mouse.tx - mouse.x) * 0.06;
-  mouse.y += (mouse.ty - mouse.y) * 0.06;
   const t0 = performance.now();
   drawScene(now, now / 1000);
   if (perf.on && gl) gl.finish();  // wait for the GPU so the number below is its real cost; only while measuring
@@ -566,10 +579,6 @@ export function mountScene(id, lookId = LOOKS[0].id) {
   initGL($("scene"));
   setLook(lookId);
   setScene(id);
-  addEventListener("pointermove", (e) => {
-    mouse.tx = (e.clientX / innerWidth - 0.5) * 2;
-    mouse.ty = (e.clientY / innerHeight - 0.5) * 2;
-  });
   fxc.addEventListener("pointermove", (e) => { fxc.style.cursor = hitClock(...worldPoint(e)) ? "pointer" : ""; });
   fxc.addEventListener("click", (e) => { if (hitClock(...worldPoint(e))) onClick(); });
   scheduleBlink();

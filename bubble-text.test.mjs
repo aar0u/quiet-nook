@@ -11,6 +11,11 @@ test("bubble pages preserve text and stay within the character limit", () => {
   assert.deepEqual(bubblePages("字".repeat(20) + "。", 20), ["字".repeat(19), "字。"]);
 });
 
+test("bubble pages drop paragraph breaks and edge whitespace", () => {
+  assert.deepEqual(bubblePages("第一段。\n\n要是真能坐在你旁边。\n", 20), ["第一段。要是真能坐在你旁边。"]);
+  assert.deepEqual(bubblePages("  \n"), []);
+});
+
 test("bubble reading time grows with length and stays bounded", () => {
   assert.equal(bubbleDuration("短句"), 3500);
   assert.ok(bubbleDuration("字".repeat(30)) > bubbleDuration("短句"));
