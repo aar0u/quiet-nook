@@ -80,7 +80,7 @@ precision highp float;
 #else
 precision mediump float;
 #endif
-uniform sampler2D uA, uB, uPlate; uniform float uMix, uT; uniform vec2 uMouse, uShadow;
+uniform sampler2D uA, uB, uPlate; uniform float uMix, uT, uFloor; uniform vec2 uMouse, uShadow;
 uniform vec3 uTint, uLampRgb; uniform vec4 uFit, uLamp;  // uLamp: x, y, k (strength, 0 = off), unused
 varying vec2 uv;
 vec4 her(vec2 p){
@@ -97,10 +97,14 @@ void main(){
   float body = smoothstep(380., 520., px.y) * (1. - smoothstep(620., 760., px.y));
   float head = 1. - smoothstep(380., 520., px.y);
   vec2 d = vec2(0., -sin(uT * 1.2) * (1.2 + 2.2 * body) * rest);  // breathing, strongest at the shoulders
-  d += vec2(uMouse.x * 2.6 + sin(uT * .45), uMouse.y * 1.1) * head; // head leans toward the cursor
+  d += vec2(uMouse.x * 1.3 + sin(uT * .45) * 0.5, uMouse.y * 1.1) * head; // head leans toward the cursor
   float lum = dot(h0.rgb, vec3(.299, .587, .114)) / max(h0.a, .001);
   float hair = h0.a * smoothstep(.40, .16, lum) * smoothstep(300., 700., px.y) * rest;
   d.x += hair * sin(uT * .9 + px.y * .012 + px.x * .004) * 1.2;     // long hair sways below the chin
+  float upper = 1. - smoothstep(500., 620., px.y);
+  float shoulders = smoothstep(330., 420., px.y) * (1. - smoothstep(490., 590., px.y));
+  vec2 floorMotion = vec2(d.x, -sin(uT * 1.2) * (0.35 * upper + 1.15 * shoulders) + uMouse.y * 1.1 * head);
+  d = mix(d, floorMotion, uFloor);
   vec2 p = uv - d * inv;
   vec4 g = her(p);
   vec3 room = texture2D(uPlate, uv).rgb;
@@ -136,7 +140,7 @@ function initGL(canvas) {
   const p = gl.getAttribLocation(prog, "p");
   gl.enableVertexAttribArray(p);
   gl.vertexAttribPointer(p, 2, gl.FLOAT, false, 0, 0);
-  loc = Object.fromEntries(["uA", "uB", "uPlate", "uMix", "uT", "uMouse", "uShadow", "uTint", "uFit", "uLamp", "uLampRgb"].map((n) => [n, gl.getUniformLocation(prog, n)]));
+  loc = Object.fromEntries(["uA", "uB", "uPlate", "uMix", "uT", "uFloor", "uMouse", "uShadow", "uTint", "uFit", "uLamp", "uLampRgb"].map((n) => [n, gl.getUniformLocation(prog, n)]));
   gl.uniform1i(loc.uA, 0);
   gl.uniform1i(loc.uB, 1);
   gl.uniform1i(loc.uPlate, 2);
@@ -280,8 +284,9 @@ function drawScene(now, t) {
   gl.uniform4f(loc.uLamp, lamp ? lamp.pos[0] : 0, lamp ? lamp.pos[1] : 0, lamp ? lamp.k * flick : 0, 0);
   gl.uniform3f(loc.uLampRgb, ...(lamp ? lamp.rgb : [0, 0, 0]));
   gl.uniform1f(loc.uMix, mix);
-  gl.uniform1f(loc.uT, still || scene.room === "floor" ? 0 : t);
-  gl.uniform2f(loc.uMouse, still || scene.room === "floor" ? 0 : mouse.x, still || scene.room === "floor" ? 0 : mouse.y);
+  gl.uniform1f(loc.uT, still ? 0 : t);
+  gl.uniform1f(loc.uFloor, scene.room === "floor" ? 1 : 0);
+  gl.uniform2f(loc.uMouse, still ? 0 : mouse.x, still ? 0 : mouse.y);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
 
