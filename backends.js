@@ -1,4 +1,5 @@
-// Pure request builders and reply extractors for each chat backend, so they can be tested without a network.
+// Pure helpers for the chat server, so they can be tested without a network: request builders and reply extractors for
+// each backend, the persona text, the Vertex sign-in assertion, and small parsers for settings and replies.
 
 // Providers want the first turn from the user and alternating roles; the app can store neither.
 export function normalize(messages) {

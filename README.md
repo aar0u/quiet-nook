@@ -14,7 +14,7 @@ A cozy desktop study companion with two rooms: a floor-seated afternoon scene an
 - The whole room, including the clock and her speech bubble, is canvas. The side panel is the only DOM element over it.
 - She can operate the clock: say "I'm going to focus for a while" and she starts it.
 - Chat with her. She sees the timer state.
-- Chat requests are sent in order. The app retains up to 60 messages and sends the retained history with each request.
+- Chat requests are sent in order. The app retains the last 60 messages (`CP_HISTORY` changes this) and sends them with each request.
 - Synthesized rain and brown noise, no audio files.
 - Everything is stored in the browser (`localStorage`). There is no account and no server-side state.
 
@@ -82,7 +82,8 @@ Desk looks and placement are defined in `public/char.js`. Use complete transpare
 
 ## Limits
 
-- The `anthropic` and `openai` backends have been exercised only with a dummy key (the request reaches the provider and is rejected). The `opencode` backend is the one used day to day.
+- The `vertex` backend has been run against the real Gemini API. The `anthropic` and `openai` backends have been exercised only with a dummy key (the request reaches the provider and is rejected), and `opencode` is a local development service.
+- The desktop companion (`desktop/`) is a separate browser profile: its chat history and settings are not shared with the page you open at `http://127.0.0.1:7777`.
 - The animation is a few pixels of displacement of a painted image, not a rigged model. It reads as alive, not as a game character.
 - On a very wide, short window the scene is cropped to fill it, so you see her face and part of the desk.
 - She is a companion character, not a therapist. The prompt tells her to point you to people around you or a local helpline if you mention self-harm, and not to give a diagnosis. Do not rely on it for crisis support.

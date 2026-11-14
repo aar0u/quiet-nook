@@ -114,7 +114,7 @@ async function serveStatic(req, res) {
   const url = new URL(req.url, "http://localhost");
   const rel = path.normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, "");
   const file = path.join(ROOT, rel === path.sep ? "index.html" : rel);
-  if (!file.startsWith(ROOT)) { res.writeHead(403); return res.end(); }
+  if (!file.startsWith(ROOT + path.sep)) { res.writeHead(403); return res.end(); }  // with the separator, a sibling folder named "public…" does not pass
   try {
     const data = await readFile(file);
     res.writeHead(200, { "content-type": TYPES[path.extname(file)] || "application/octet-stream", "cache-control": "no-cache" });
