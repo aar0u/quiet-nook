@@ -29,7 +29,7 @@ export const LOOKS = [
 ];
 const FACE_LAYOUTS = {
   "looks/floor-cheek": { blinkOrigin: [590, 155], blinkRects: [[590, 175, 72, 60], [680, 155, 75, 65]] },
-  "looks/floor-rest": { blinkOrigin: [725, 155], blinkRects: [[725, 180, 70, 60], [810, 155, 75, 70]] },
+  "looks/floor-rest": { blinkOrigin: [665, 170], blinkRects: [[665, 175, 78, 65], [755, 170, 65, 65]] },
   "looks/default": {
     blinkOrigin: [430, 220], blinkRects: [[430, 245, 105, 80], [548, 220, 105, 83]],
     blinkPolygons: [
