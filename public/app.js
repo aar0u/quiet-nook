@@ -138,21 +138,23 @@ function noiseBuffer(brown) {
 function startAudioIfNeeded() {
   if (!ctx) {
     ctx = new AudioContext();
-    const mk = (name, brown, filterType, freq) => {
-      const src = ctx.createBufferSource();
-      src.buffer = noiseBuffer(brown);
-      src.loop = true;
-      const f = ctx.createBiquadFilter();
-      f.type = filterType; f.frequency.value = freq;
-      const g = ctx.createGain();
-      g.gain.value = 0;
-      src.connect(f).connect(g).connect(ctx.destination);
-      src.start();
-      gains[name] = g;
-    };
-    mk("rain", false, "bandpass", 3200);
-    mk("brown", true, "lowpass", 600);
-    for (const name of SOUNDS) applyVolume(name);
+    if (!COMPANION) {
+      const mk = (name, brown, filterType, freq) => {
+        const src = ctx.createBufferSource();
+        src.buffer = noiseBuffer(brown);
+        src.loop = true;
+        const f = ctx.createBiquadFilter();
+        f.type = filterType; f.frequency.value = freq;
+        const g = ctx.createGain();
+        g.gain.value = 0;
+        src.connect(f).connect(g).connect(ctx.destination);
+        src.start();
+        gains[name] = g;
+      };
+      mk("rain", false, "bandpass", 3200);
+      mk("brown", true, "lowpass", 600);
+      for (const name of SOUNDS) applyVolume(name);
+    }
   }
   if (ctx.state === "suspended") ctx.resume();
 }
@@ -178,7 +180,7 @@ function pickScene(id) {
   save("scene", id);
   save(`scene:${activeRoom}`, id);
   for (const b of $("scenes").children) b.classList.toggle("active", b.dataset.id === id);
-  if ($("autoSound").checked) {
+  if (!COMPANION && $("autoSound").checked) {
     for (const name of SOUNDS) { $(name).value = SCENE_SOUND[id][name]; applyVolume(name); }
   }
 }

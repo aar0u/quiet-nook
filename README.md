@@ -40,7 +40,7 @@ cd desktop && pnpm install     # once
 pnpm start
 ```
 
-All Electron code and configuration is in `desktop/`; delete the folder to remove it. The companion window has no timer controls yet; the clock tags in chat (`[start]`, `[pause]`) still work.
+All Electron code and configuration is in `desktop/`; delete the folder to remove it. The companion window has no timer controls yet; the clock tags in chat (`[start]`, `[pause]`) still work. Ambient audio is disabled in companion mode; timer alerts remain audible.
 
 ## Chat backends
 
